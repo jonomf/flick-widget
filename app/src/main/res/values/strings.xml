@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Flick</string>
+    <string name="widget_label">Flick</string>
+    <string name="widget_desc">Tap, then flick: a radial menu that opens from the widget.</string>
+</resources>

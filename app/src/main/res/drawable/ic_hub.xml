@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Flick symbol: a disc with 8 spokes around a centre dot. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="@color/btn_bg" android:pathData="M24,1a23,23 0 1,0 0.01,0z" />
+    <group android:pivotX="24" android:pivotY="24">
+        <path android:fillColor="@color/btn_text" android:pathData="M24,24m-4,0a4,4 0 1,0 8,0a4,4 0 1,0 -8,0" />
+        <path android:strokeColor="@color/btn_text" android:strokeWidth="3" android:strokeLineCap="round"
+            android:pathData="M24,7.5L24,14 M24,34L24,40.5 M7.5,24L14,24 M34,24L40.5,24" />
+        <path android:strokeColor="@color/btn_text" android:strokeWidth="2.4" android:strokeLineCap="round" android:strokeAlpha="0.6"
+            android:pathData="M12.3,12.3L16.6,16.6 M31.4,31.4L35.7,35.7 M35.7,12.3L31.4,16.6 M16.6,31.4L12.3,35.7" />
+    </group>
+</vector>

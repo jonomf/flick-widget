@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <queries>
+        <!-- Lists your apps (with launcher icons) for the menu editor, and opens them. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- The Widget Updater, which checks for new builds and installs them. -->
+        <package android:name="com.jono.widgetupdater" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Makes the widget's long-press menu show a settings entry that opens this screen. -->
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- The flick overlay: see-through, over the home screen, centred on the widget. -->
+        <activity
+            android:name=".FlickActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.jono.flick.overlay"
+            android:theme="@style/Overlay" />
+
+        <!-- Widget shortcut taps: invisible, opens the app, closes. -->
+        <activity
+            android:name=".LaunchActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Invisible" />
+
+        <!-- Lets the Widget Updater find this app and tell it when a new build is out. -->
+        <receiver
+            android:name=".UpdateStatusReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.jono.widgets.UPDATABLE" />
+            </intent-filter>
+            <meta-data android:name="com.jono.widgets.repo" android:value="jonomf/flick-widget" />
+            <meta-data android:name="com.jono.widgets.asset" android:value="flick-widget.apk" />
+        </receiver>
+
+        <receiver
+            android:name=".FlickWidget"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+    </application>
+</manifest>
