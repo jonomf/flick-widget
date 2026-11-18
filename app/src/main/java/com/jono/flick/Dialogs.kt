@@ -7,6 +7,13 @@ import android.widget.EditText
 import android.widget.LinearLayout
 
 object Dialogs {
+    /** Opens the keyboard on [field] as soon as the dialog shows (instead of waiting for a tap). */
+    fun AlertDialog.withKeyboard(field: EditText): AlertDialog {
+        window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        setOnShowListener { field.requestFocus() }
+        return this
+    }
+
     /** First web link in some shared or pasted text. */
     fun findUrl(text: String?): String? =
         text?.let { Regex("""(https?://|[a-z][a-z0-9+.-]*://)\S+""", RegexOption.IGNORE_CASE).find(it)?.value }
@@ -67,6 +74,8 @@ object Dialogs {
             }
             .setNegativeButton("Cancel") { _, _ -> onCancel() }
             .setOnCancelListener { onCancel() }
+            .create()
+            .withKeyboard(if (nameIn.text.isEmpty()) nameIn else urlIn)
             .show()
     }
 
@@ -86,7 +95,8 @@ object Dialogs {
             })
             .setPositiveButton("OK") { _, _ -> onDone(input.text.toString().trim().ifEmpty { "Folder" }) }
             .setNegativeButton("Cancel", null)
+            .create()
+            .withKeyboard(input)
             .show()
-        input.requestFocus()
     }
 }

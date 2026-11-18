@@ -189,6 +189,15 @@ class FlickView(
         showRing(f, at, if (f === root) emptyList() else path)
     }
 
+    /** Where each level's ring was shown, so going back up returns it to the same place. */
+    private val ringPos = HashMap<List<Int>, Recognizer.Pt>()
+
+    /** Up one level, with the ring back where that level was. */
+    private fun goUp() {
+        val up = ringPath.dropLast(1)
+        showRing(root.at(up) ?: root, ringPos[up] ?: if (up.isEmpty()) anchor else ringAt, up)
+    }
+
     private fun showRing(f: Slot.Folder, at: Recognizer.Pt, path: List<Int>) {
         removeCallbacks(autoRing)
         removeCallbacks(preBlank)
@@ -196,6 +205,7 @@ class FlickView(
         ringFolder = f
         ringPath = path
         ringAt = clamp(at)
+        ringPos[path] = ringAt
         mode = Mode.RING
         rec = null
         invalidate()
@@ -358,7 +368,7 @@ class FlickView(
                 if (centreTap) {
                     // Centre of the ring: up a level, or close at the top.
                     if (ringPath.isEmpty()) listener.onClose()
-                    else showRing(root.at(ringPath.dropLast(1)) ?: root, ringAt, ringPath.dropLast(1))
+                    else goUp()
                 } else {
                     buzz(HapticFeedbackConstants.CONFIRM)
                     showRing(res.folder, res.at, gestureBase + res.path)
@@ -371,7 +381,7 @@ class FlickView(
                 gestureFrom == Mode.ARMED -> if (assign) showRing(root, res.at, emptyList()) else listener.onClose()
                 // Tap on the centre: up a level, or close at the top (as before).
                 centreStart -> if (ringPath.isEmpty()) listener.onClose()
-                    else showRing(root.at(ringPath.dropLast(1)) ?: root, ringAt, ringPath.dropLast(1))
+                    else goUp()
                 else -> back()
             }
             is Recognizer.Result.Spot -> if (assign) {

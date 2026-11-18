@@ -309,20 +309,10 @@ class MainActivity : Activity() {
     }
 
     private fun renameFolder(f: Slot.Folder) {
-        val input = EditText(this).apply {
-            setText(f.name)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-            selectAll()
+        Dialogs.folderName(this, f.name) { name ->
+            f.name = name
+            save()
         }
-        AlertDialog.Builder(this)
-            .setTitle("Folder name")
-            .setView(LinearLayout(this).apply { setPadding(dp(20), dp(8), dp(20), 0); addView(input, LinearLayout.LayoutParams(-1, -2)) })
-            .setPositiveButton("OK") { _, _ ->
-                f.name = input.text.toString().trim().ifEmpty { "Folder" }
-                save()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
     /** Same picker as everywhere: last 3 apps, then all apps A–Z. */
