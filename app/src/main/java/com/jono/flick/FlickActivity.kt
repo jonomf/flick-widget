@@ -41,6 +41,7 @@ class FlickActivity : Activity(), FlickView.Listener {
     /** Set when a widget's remap pip opened us: the tapped spot gets this app. */
     private var assignApp: Slot.App? = null
     private lateinit var root: FrameLayout
+    private var panelView: View? = null
 
     private fun start(i: Intent) {
         assignApp = i.getStringExtra(EXTRA_ASSIGN_PKG)?.let { Slot.App(it, i.getStringExtra(EXTRA_ASSIGN_LABEL) ?: it) }
@@ -105,6 +106,7 @@ class FlickActivity : Activity(), FlickView.Listener {
 
     /** A stroke ended on an empty spot: offer to put an app there (then open it). */
     override fun onEmptySpot(path: List<Int>): Boolean {
+        panelView?.let { root.removeView(it) }
         val menu = Store.menu(this)
         val where = menu.describe(path)
         view.visibility = View.INVISIBLE
@@ -130,7 +132,23 @@ class FlickActivity : Activity(), FlickView.Listener {
             setTextColor(getColor(R.color.widget_subtext))
             setPadding(0, dp(2), 0, dp(4))
         })
-        val picker = AppPicker(this) { app, _ ->
+        val newFolder = { _: View ->
+            Dialogs.folderName(this, "Folder") { name ->
+                val fresh = Store.menu(this)
+                val folder = fresh.at(path.dropLast(1))
+                if (folder != null && folder.slots[path.last()] == null) {
+                    folder.slots[path.last()] = Slot.Folder(name)
+                    Store.saveMenu(this, fresh)
+                    WidgetRenderer.renderAll(this)
+                }
+                // Show the new (empty) folder's ring: tap its dots to fill it.
+                root.removeView(panel)
+                view.useMenu(fresh)
+                view.visibility = View.VISIBLE
+                view.openRing(path, Recognizer.Pt(view.width / 2f, view.height / 2f))
+            }
+        }
+        val picker = AppPicker(this, newFolder) { app, _ ->
             val fresh = Store.menu(this)
             val folder = fresh.at(path.dropLast(1))
             if (folder != null && folder.slots[path.last()] == null) {
@@ -157,6 +175,7 @@ class FlickActivity : Activity(), FlickView.Listener {
             }
         }
         root.addView(panel, FrameLayout.LayoutParams(-1, -1))
+        panelView = panel
         panel.requestApplyInsets()
         return true
     }

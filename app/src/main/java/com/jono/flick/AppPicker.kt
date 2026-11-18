@@ -21,7 +21,12 @@ import android.widget.TextView
  * the last 3 apps you used, then a search box and every app A–Z in a grid like the system drawer.
  * Under each app: where it already sits in the menu.
  */
-class AppPicker(ctx: Context, private val onPick: (Slot.App, View) -> Unit) : LinearLayout(ctx) {
+class AppPicker(
+    ctx: Context,
+    /** When set, the first tile is "New folder"; tapping it calls this. */
+    private val onNewFolder: ((View) -> Unit)? = null,
+    private val onPick: (Slot.App, View) -> Unit,
+) : LinearLayout(ctx) {
     private val d = resources.displayMetrics.density
     private fun dp(v: Int) = (v * d).toInt()
 
@@ -89,6 +94,14 @@ class AppPicker(ctx: Context, private val onPick: (Slot.App, View) -> Unit) : Li
         recent = RecentApps.get(context, all)
         accessHint.visibility = if (RecentApps.hasAccess(context)) View.GONE else View.VISIBLE
         recentRow.removeAllViews()
+        onNewFolder?.let { make ->
+            val cell = makeCell(context)
+            (cell.getChildAt(0) as ImageView).setImageResource(R.drawable.ic_new_folder)
+            (cell.getChildAt(1) as TextView).text = "New folder"
+            (cell.getChildAt(2) as TextView).text = ""
+            cell.setOnClickListener { make(cell) }
+            recentRow.addView(cell, LayoutParams(0, -2, 1f))
+        }
         recent.forEach { app ->
             val cell = makeCell(context)
             bindCell(cell, app)
@@ -100,15 +113,21 @@ class AppPicker(ctx: Context, private val onPick: (Slot.App, View) -> Unit) : Li
         adapter.refresh()
     }
 
-    /** The app under ([x], [y]) in this view's coordinates, and its cell; for hold-to-draw. */
-    fun appAt(x: Float, y: Float): Pair<Slot.App, View>? {
+    /**
+     * The item under ([x], [y]) in this view's coordinates, and its cell; for hold-to-draw.
+     * The "New folder" tile gives a new empty folder.
+     */
+    fun itemAt(x: Float, y: Float): Pair<Slot, View>? {
         val r = Rect()
+        val first = if (onNewFolder != null) 1 else 0
         for (i in 0 until recentRow.childCount) {
             val c = recentRow.getChildAt(i)
-            if (i >= recent.size) break
+            if (i >= first + recent.size) break
             c.getHitRect(r)
             r.offset(recentRow.left, recentRow.top)
-            if (r.contains(x.toInt(), y.toInt())) return recent[i] to c
+            if (r.contains(x.toInt(), y.toInt())) {
+                return (if (i < first) Slot.Folder("Folder") else recent[i - first]) to c
+            }
         }
         val pos = grid.pointToPosition((x - grid.left).toInt(), (y - grid.top).toInt())
         if (pos == GridView.INVALID_POSITION || pos >= shown.size) return null

@@ -49,10 +49,11 @@ class FlickView(
     }
 
     /** Assign mode: the app being placed, drawn under the finger. */
-    var carry: Slot.App? = null
+    var carry: Slot? = null
 
     /** Stop the auto-close and hold timers (something else is on screen now). */
     fun idle() {
+        removeCallbacks(autoRing)
         removeCallbacks(timeout)
         removeCallbacks(ticker)
     }
@@ -65,6 +66,7 @@ class FlickView(
     /** Assign mode: start a stroke at ([x], [y]) without a touch-down (the drawer saw the down). */
     fun beginAt(x: Float, y: Float, t: Long) {
         removeCallbacks(timeout)
+        removeCallbacks(autoRing)
         mode = Mode.ARMED
         startGesture(x, y, t)
     }
@@ -81,6 +83,7 @@ class FlickView(
         dwellMs = Store.dwellMs(context),
     )
     private val haptics = Store.haptics(context)
+    private val dotStyle = Store.dotStyle(context)
 
     private val ringR = dp(96f)
     private val bubbleR = dp(28f)
@@ -145,7 +148,13 @@ class FlickView(
         rec = null
         invalidate()
         scheduleTimeout(4500)
+        // No flick yet after a moment: show the ring on the widget.
+        removeCallbacks(autoRing)
+        val delay = Store.ringDelayMs(context)
+        if (!assign && delay > 0) postDelayed(autoRing, delay)
     }
+
+    private val autoRing = Runnable { if (mode == Mode.ARMED) showRing(root, anchor, emptyList()) }
 
     /** Opens straight into a folder's ring (a folder tapped on the widget). */
     fun openRing(path: List<Int>, at: Recognizer.Pt) {
@@ -155,6 +164,7 @@ class FlickView(
     }
 
     private fun showRing(f: Slot.Folder, at: Recognizer.Pt, path: List<Int>) {
+        removeCallbacks(autoRing)
         ringFolder = f
         ringPath = path
         ringAt = clamp(at)
@@ -199,6 +209,7 @@ class FlickView(
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 removeCallbacks(timeout)
+                removeCallbacks(autoRing)
                 if (mode == Mode.RESULT) return true
                 startGesture(e.x, e.y, e.eventTime)
             }
@@ -288,7 +299,9 @@ class FlickView(
             }
             is Recognizer.Result.Tap -> when {
                 startedOutside -> listener.onClose()
-                gestureFrom == Mode.ARMED -> showRing(root, res.at, emptyList())
+                // Just armed: a tap (not a flick) closes. In the drawer, holding still then
+                // letting go shows the ring to tap a spot on.
+                gestureFrom == Mode.ARMED -> if (assign) showRing(root, res.at, emptyList()) else listener.onClose()
                 else -> back()
             }
             is Recognizer.Result.Spot -> if (assign) {
@@ -323,15 +336,15 @@ class FlickView(
         val ringVisible = mode == Mode.RING || (mode == Mode.GESTURE && r?.shown == true)
         c.drawColor(Color.argb(if (ringVisible) 110 else if (mode == Mode.GESTURE) 40 else 18, 0, 0, 0))
 
-        carry?.let { app ->
+        carry?.let { item ->
             // The app being placed: above the ring, or under the finger while drawing.
             val centre = if (mode == Mode.GESTURE && r != null) r.origin else ringAt
             val p = if (mode == Mode.GESTURE && r != null && !r.shown) r.point
             else Recognizer.Pt(centre.x, (centre.y - ringR - bubbleR - dp(44f)).coerceAtLeast(dp(56f)))
             if (mode == Mode.RING || mode == Mode.GESTURE) {
                 val size = iconSize * 1.2f
-                if (mode == Mode.RING || r?.shown == true) drawChip(c, p.x, p.y - size / 2 - dp(14f), "Place ${app.label}", text)
-                Icons.draw(context, c, app, p.x - size / 2, p.y - size / 2, size)
+                if (mode == Mode.RING || r?.shown == true) drawChip(c, p.x, p.y - size / 2 - dp(14f), "Place ${item.label}", text)
+                Icons.draw(context, c, item, p.x - size / 2, p.y - size / 2, size)
             }
         }
         when (mode) {
@@ -406,15 +419,35 @@ class FlickView(
             val y = o.y - (ringR * cos(a)).toFloat()
             val s = f.slots[i]
             if (s == null) {
-                // Empty spot: a small dot, so you can see the position (and aim for it to map it).
+                // Empty spot: a small dot (style is a setting), bigger when pointed at.
                 val on = i == hover
-                fill.color = if (on) highlight else surface
-                fill.alpha = 235
-                c.drawCircle(x, y, if (on) dp(11f) else dp(7f), fill)
-                fill.alpha = 255
-                outline.color = onSurface
-                outline.alpha = if (on) 200 else 120
-                c.drawCircle(x, y, if (on) dp(11f) else dp(7f), outline)
+                when (dotStyle) {
+                    Store.DOT_OFF -> if (on) {
+                        outline.color = onSurface
+                        outline.alpha = 160
+                        c.drawCircle(x, y, dp(8f), outline)
+                    }
+                    Store.DOT_GREY -> {
+                        fill.color = if (on) highlight else surface
+                        fill.alpha = 235
+                        c.drawCircle(x, y, if (on) dp(9f) else dp(5f), fill)
+                        fill.alpha = 255
+                        outline.color = onSurface
+                        outline.alpha = 120
+                        c.drawCircle(x, y, if (on) dp(9f) else dp(5f), outline)
+                    }
+                    else -> {
+                        // White, with a faint shadow ring so it shows on light wallpapers too.
+                        val rad = if (on) dp(7f) else dp(3.5f)
+                        fill.color = Color.BLACK
+                        fill.alpha = 60
+                        c.drawCircle(x, y, rad + dp(1.2f), fill)
+                        fill.color = Color.WHITE
+                        fill.alpha = 240
+                        c.drawCircle(x, y, rad, fill)
+                        fill.alpha = 255
+                    }
+                }
                 continue
             }
             val on = i == hover

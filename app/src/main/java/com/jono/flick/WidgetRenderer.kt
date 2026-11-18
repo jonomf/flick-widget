@@ -132,9 +132,14 @@ object WidgetRenderer {
             val i = slotFor[c]
             val s = if (i != null) menu.slots[i] else null
             if (i != null && s == null && k.ring) {
-                // Empty compass spot: a small dot; tap it to put an app there.
+                // Empty compass spot: a small dot (style is a setting); tap it to put an app there.
+                val style = Store.dotStyle(ctx)
+                if (style == Store.DOT_OFF) {
+                    rv.setViewVisibility(CELL[c], View.INVISIBLE)
+                    continue
+                }
                 rv.setViewVisibility(CELL[c], View.VISIBLE)
-                rv.setImageViewResource(CELL_ICON[c], R.drawable.empty_dot)
+                rv.setImageViewResource(CELL_ICON[c], if (style == Store.DOT_GREY) R.drawable.empty_dot else R.drawable.empty_dot_white)
                 rv.setContentDescription(CELL[c], "Empty ${Slot.DIRECTIONS[i]}")
                 if (k.labels) rv.setTextViewText(CELL_TEXT[c], "")
                 rv.setOnClickPendingIntent(CELL[c], mutable(ctx, 500 + i, FlickActivity.emptyIntent(ctx, listOf(i))))

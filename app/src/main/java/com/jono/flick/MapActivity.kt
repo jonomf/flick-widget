@@ -69,7 +69,8 @@ class MapActivity : Activity(), FlickView.Listener {
         statusRow.addView(undo)
         col.addView(statusRow)
 
-        picker = AppPicker(this) { app, cell -> tapPlace(app, cell) }.apply { menu = this@MapActivity.menu }
+        picker = AppPicker(this, { cell -> tapPlace(Slot.Folder("Folder"), cell) }) { app, cell -> tapPlace(app, cell) }
+            .apply { menu = this@MapActivity.menu }
         col.addView(picker, LinearLayout.LayoutParams(-1, 0, 1f))
 
         flick = FlickView(this, menu, this, assign = true).apply { visibility = View.GONE }
@@ -87,7 +88,7 @@ class MapActivity : Activity(), FlickView.Listener {
     // ---------------------------------------------------------------- placing
 
     /** Tap: show the top ring over the app, tap a spot (or flick) to place it. */
-    private fun tapPlace(app: Slot.App, cell: View) {
+    private fun tapPlace(app: Slot, cell: View) {
         val at = centreIn(cell)
         flick.carry = app
         flick.visibility = View.VISIBLE
@@ -95,21 +96,31 @@ class MapActivity : Activity(), FlickView.Listener {
     }
 
     override fun onAssign(path: List<Int>) {
-        val app = flick.carry ?: return
+        val item = flick.carry ?: return
         val folder = menu.at(path.dropLast(1)) ?: return
         val i = path.last()
         val old = folder.slots[i]
         if (old is Slot.Folder) return // folders are replaced only in the editor
         undoMenu = Store.menu(this) // fresh copy of what's saved now
-        folder.slots[i] = app
+        folder.slots[i] = item
         save()
         val where = menu.describe(path)
-        status.text = if (old is Slot.App && old.pkg != app.pkg) "${app.label} → $where (was ${old.label})"
-        else "${app.label} → $where"
-        (status.parent as View).visibility = View.VISIBLE
-        undo.visibility = View.VISIBLE
+        fun report() {
+            val replaced = old is Slot.App && (item !is Slot.App || old.pkg != item.pkg)
+            status.text = "${item.label} → $where" + if (replaced) " (was ${old?.label})" else ""
+            (status.parent as View).visibility = View.VISIBLE
+            undo.visibility = View.VISIBLE
+        }
+        report()
         flick.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         onClose()
+        if (item is Slot.Folder) {
+            Dialogs.folderName(this, item.name) { name ->
+                item.name = name
+                save()
+                report()
+            }
+        }
     }
 
     override fun onClose() {
@@ -153,7 +164,7 @@ class MapActivity : Activity(), FlickView.Listener {
         private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
         private var downX = 0f
         private var downY = 0f
-        private var downApp: Slot.App? = null
+        private var downApp: Slot? = null
         private var tracking = false
         private var picked = false
 
@@ -209,12 +220,12 @@ class MapActivity : Activity(), FlickView.Listener {
             }
         }
 
-        private fun appAt(x: Float, y: Float): Slot.App? {
+        private fun appAt(x: Float, y: Float): Slot? {
             val p = IntArray(2)
             val me = IntArray(2)
             picker.getLocationInWindow(p)
             getLocationInWindow(me)
-            return picker.appAt(x - (p[0] - me[0]), y - (p[1] - me[1]))?.first
+            return picker.itemAt(x - (p[0] - me[0]), y - (p[1] - me[1]))?.first
         }
     }
 

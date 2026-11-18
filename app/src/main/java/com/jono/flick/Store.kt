@@ -98,6 +98,19 @@ object Store {
     fun practice(ctx: Context): Boolean = prefs(ctx).getBoolean("practice", false)
     fun setPractice(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("practice", v).apply()
 
+    /** After tapping the widget, show the ring on it if no flick has started by then. 0 = never. */
+    fun ringDelayMs(ctx: Context): Long = prefs(ctx).getLong("ring_delay", 500L)
+    fun setRingDelayMs(ctx: Context, v: Long) = prefs(ctx).edit().putLong("ring_delay", v).apply()
+
+    const val DOT_WHITE = 0
+    const val DOT_GREY = 1
+    const val DOT_OFF = 2
+    val DOT_NAMES = listOf("small white dots", "grey dots", "hidden")
+
+    /** How empty spots look, on the widget and in the ring. */
+    fun dotStyle(ctx: Context): Int = prefs(ctx).getInt("dot_style", DOT_WHITE)
+    fun setDotStyle(ctx: Context, v: Int) = prefs(ctx).edit().putInt("dot_style", v).apply()
+
     fun haptics(ctx: Context): Boolean = prefs(ctx).getBoolean("haptics", true)
     fun setHaptics(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("haptics", v).apply()
 

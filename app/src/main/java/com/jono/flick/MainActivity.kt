@@ -39,6 +39,8 @@ class MainActivity : Activity() {
     private lateinit var updateStatus: TextView
     private lateinit var updaterButton: Button
     private lateinit var dwellButton: Button
+    private lateinit var ringDelayButton: Button
+    private lateinit var dotButton: Button
     private lateinit var usageStatus: TextView
     private lateinit var usageButton: Button
 
@@ -122,6 +124,16 @@ class MainActivity : Activity() {
         })
         dwellButton = Button(this).apply { setOnClickListener { cycleDwell() } }
         col.addView(dwellButton)
+        ringDelayButton = Button(this).apply { setOnClickListener { cycleRingDelay() } }
+        col.addView(ringDelayButton)
+        dotButton = Button(this).apply {
+            setOnClickListener {
+                Store.setDotStyle(this@MainActivity, (Store.dotStyle(this@MainActivity) + 1) % Store.DOT_NAMES.size)
+                showSettings()
+                WidgetRenderer.renderAll(this@MainActivity)
+            }
+        }
+        col.addView(dotButton)
 
         // --- Widgets ---
         col.addView(heading("Your widgets"))
@@ -150,7 +162,7 @@ class MainActivity : Activity() {
         Icons.clear()
         menu = Store.menu(this) // Map apps may have changed it
         drawGrid()
-        dwellButton.text = "Hold to show the menu: ${Store.dwellMs(this)} ms (tap to change)"
+        showSettings()
         val usage = RecentApps.hasAccess(this)
         usageStatus.text = if (usage) {
             "✓ Usage access is on: the app picker starts with the 3 apps you used last."
@@ -240,7 +252,14 @@ class MainActivity : Activity() {
             opt("Open folder") { editPath = editPath + i; drawGrid() }
             opt("Rename folder") { renameFolder(s) }
         }
-        opt("Choose app…") { pickApp { app -> f.slots[i] = app; save() } }
+        opt("Choose app…") {
+            pickApp(onFolder = {
+                Dialogs.folderName(this, "Folder") { name ->
+                    f.slots[i] = Slot.Folder(name)
+                    save()
+                }
+            }) { app -> f.slots[i] = app; save() }
+        }
         if (s !is Slot.Folder) {
             opt("Make a folder here") {
                 val nf = Slot.Folder("Folder")
@@ -285,9 +304,10 @@ class MainActivity : Activity() {
     }
 
     /** Same picker as everywhere: last 3 apps, then all apps A–Z. */
-    private fun pickApp(onPick: (Slot.App) -> Unit) {
+    private fun pickApp(onFolder: (() -> Unit)? = null, onPick: (Slot.App) -> Unit) {
         lateinit var dialog: AlertDialog
-        val picker = AppPicker(this) { app, _ ->
+        val newFolder: ((View) -> Unit)? = onFolder?.let { f -> { _: View -> dialog.dismiss(); f() } }
+        val picker = AppPicker(this, newFolder) { app, _ ->
             onPick(app)
             dialog.dismiss()
         }.apply {
@@ -309,6 +329,21 @@ class MainActivity : Activity() {
     }
 
     // ---------------------------------------------------------------- settings
+
+    private fun showSettings() {
+        dwellButton.text = "Hold to show the menu: ${Store.dwellMs(this)} ms (tap to change)"
+        val rd = Store.ringDelayMs(this)
+        ringDelayButton.text = if (rd == 0L) "After tapping the widget: wait for a flick (ring never shows by itself)"
+        else "After tapping the widget: show the ring after $rd ms (tap to change)"
+        dotButton.text = "Empty spots: ${Store.DOT_NAMES[Store.dotStyle(this)]} (tap to change)"
+    }
+
+    private fun cycleRingDelay() {
+        val steps = listOf(300L, 500L, 700L, 1000L, 1500L, 0L)
+        val i = steps.indexOf(Store.ringDelayMs(this))
+        Store.setRingDelayMs(this, steps[(i + 1) % steps.size])
+        showSettings()
+    }
 
     private fun cycleDwell() {
         val steps = listOf(200L, 250L, 300L, 400L, 500L, 700L)
