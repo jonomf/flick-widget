@@ -31,6 +31,12 @@
             </intent-filter>
         </activity>
 
+        <!-- App drawer for mapping apps onto the menu by drawing their gesture. -->
+        <activity
+            android:name=".MapActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+
         <!-- The flick overlay: see-through, over the home screen, centred on the widget. -->
         <activity
             android:name=".FlickActivity"

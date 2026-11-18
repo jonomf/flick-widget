@@ -131,9 +131,14 @@ class RecognizerTest {
         assertEquals(listOf(2), res.path)
     }
 
-    @Test fun emptyDirectionCancels() {
+    @Test fun emptyDirectionIsASpot() {
         val r = Recognizer(menu(), g)
-        assertTrue(stroke(r, 0f to 0f, 0f to 100f) is Recognizer.Result.Cancel)
+        val res = stroke(r, 0f to 0f, 0f to 100f)
+        assertEquals(listOf(4), (res as Recognizer.Result.Spot).path)
+        // Into More (E), then an empty spot (NW) in it.
+        val r2 = Recognizer(menu(), g)
+        val res2 = stroke(r2, 0f to 0f, 100f to 0f, 30f to -70f)
+        assertEquals(listOf(2, 7), (res2 as Recognizer.Result.Spot).path)
     }
 
     @Test fun tapOnShownRingItem() {

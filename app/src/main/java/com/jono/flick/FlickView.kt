@@ -33,13 +33,32 @@ import kotlin.math.sin
 @SuppressLint("ViewConstructor")
 class FlickView(
     context: Context,
-    private val root: Slot.Folder,
+    private var root: Slot.Folder,
     private val listener: Listener,
+    /** Assign mode (the app drawer): a stroke picks a spot to put [carry] in, instead of launching. */
+    private val assign: Boolean = false,
 ) : View(context) {
 
     interface Listener {
-        fun onLaunch(app: Slot.App, route: List<String>, x: Float, y: Float)
+        fun onLaunch(app: Slot.App, route: List<String>, x: Float, y: Float) {}
         fun onClose()
+        /** Assign mode: the spot chosen (folder indexes, then the slot index). */
+        fun onAssign(path: List<Int>) {}
+    }
+
+    /** Assign mode: the app being placed, drawn under the finger. */
+    var carry: Slot.App? = null
+
+    fun useMenu(m: Slot.Folder) {
+        root = m
+        invalidate()
+    }
+
+    /** Assign mode: start a stroke at ([x], [y]) without a touch-down (the drawer saw the down). */
+    fun beginAt(x: Float, y: Float, t: Long) {
+        removeCallbacks(timeout)
+        mode = Mode.ARMED
+        startGesture(x, y, t)
     }
 
     private enum class Mode { ARMED, GESTURE, RING, RESULT }
@@ -173,28 +192,7 @@ class FlickView(
             MotionEvent.ACTION_DOWN -> {
                 removeCallbacks(timeout)
                 if (mode == Mode.RESULT) return true
-                gestureFrom = mode
-                val p = Recognizer.Pt(e.x, e.y)
-                val r: Recognizer
-                if (mode == Mode.RING) {
-                    val inside = Recognizer.dist(p, ringAt) <= ringR + bubbleR * 1.6f
-                    startedOutside = !inside
-                    r = Recognizer(ringFolder, geo, startShown = inside)
-                    r.down(e.x, e.y, e.eventTime, if (inside) ringAt else null)
-                    gestureBase = ringPath
-                } else {
-                    startedOutside = false
-                    r = Recognizer(root, geo)
-                    r.down(e.x, e.y, e.eventTime)
-                    gestureBase = emptyList()
-                }
-                rec = r
-                lastHover = r.hover
-                lastLevels = 1
-                mode = Mode.GESTURE
-                removeCallbacks(ticker)
-                postDelayed(ticker, 30)
-                invalidate()
+                startGesture(e.x, e.y, e.eventTime)
             }
             MotionEvent.ACTION_MOVE -> {
                 val r = rec ?: return true
@@ -217,6 +215,31 @@ class FlickView(
         return true
     }
 
+    private fun startGesture(x: Float, y: Float, t: Long) {
+        gestureFrom = mode
+        val p = Recognizer.Pt(x, y)
+        val r: Recognizer
+        if (mode == Mode.RING) {
+            val inside = Recognizer.dist(p, ringAt) <= ringR + bubbleR * 1.6f
+            startedOutside = !inside
+            r = Recognizer(ringFolder, geo, startShown = inside)
+            r.down(x, y, t, if (inside) ringAt else null)
+            gestureBase = ringPath
+        } else {
+            startedOutside = false
+            r = Recognizer(root, geo)
+            r.down(x, y, t)
+            gestureBase = emptyList()
+        }
+        rec = r
+        lastHover = r.hover
+        lastLevels = 1
+        mode = Mode.GESTURE
+        removeCallbacks(ticker)
+        postDelayed(ticker, 30)
+        invalidate()
+    }
+
     private fun feed(r: Recognizer, x: Float, y: Float, t: Long) {
         val entered = r.move(x, y, t)
         if (entered) {
@@ -231,7 +254,9 @@ class FlickView(
     private fun finish(r: Recognizer, res: Recognizer.Result) {
         val baseNames = root.names(gestureBase)
         when (res) {
-            is Recognizer.Result.Launch -> {
+            is Recognizer.Result.Launch -> if (assign) {
+                listener.onAssign(gestureBase + res.path)
+            } else {
                 val route = baseNames + res.names.dropLast(1)
                 if (Store.practice(context)) {
                     resultText = (route + res.app.label).joinToString("  ›  ")
@@ -258,6 +283,12 @@ class FlickView(
                 gestureFrom == Mode.ARMED -> showRing(root, res.at, emptyList())
                 else -> back()
             }
+            is Recognizer.Result.Spot -> if (assign) {
+                listener.onAssign(gestureBase + res.path)
+            } else {
+                buzz(HapticFeedbackConstants.REJECT)
+                back()
+            }
             Recognizer.Result.Cancel -> {
                 buzz(HapticFeedbackConstants.REJECT)
                 back()
@@ -267,7 +298,8 @@ class FlickView(
 
     /** Back to where the gesture started from (armed, or the ring that was open). */
     private fun back() {
-        if (gestureFrom == Mode.RING) showRing(ringFolder, ringAt, ringPath) else arm(anchor)
+        if (assign && gestureFrom != Mode.RING) listener.onClose()
+        else if (gestureFrom == Mode.RING) showRing(ringFolder, ringAt, ringPath) else arm(anchor)
     }
 
     private fun buzz(kind: Int) {
@@ -281,6 +313,17 @@ class FlickView(
         val ringVisible = mode == Mode.RING || (mode == Mode.GESTURE && r?.shown == true)
         c.drawColor(Color.argb(if (ringVisible) 110 else if (mode == Mode.GESTURE) 40 else 18, 0, 0, 0))
 
+        carry?.let { app ->
+            // The app being placed: above the ring, or under the finger while drawing.
+            val centre = if (mode == Mode.GESTURE && r != null) r.origin else ringAt
+            val p = if (mode == Mode.GESTURE && r != null && !r.shown) r.point
+            else Recognizer.Pt(centre.x, (centre.y - ringR - bubbleR - dp(44f)).coerceAtLeast(dp(56f)))
+            if (mode == Mode.RING || mode == Mode.GESTURE) {
+                val size = iconSize * 1.2f
+                if (mode == Mode.RING || r?.shown == true) drawChip(c, p.x, p.y - size / 2 - dp(14f), "Place ${app.label}", text)
+                Icons.draw(context, c, app, p.x - size / 2, p.y - size / 2, size)
+            }
+        }
         when (mode) {
             Mode.ARMED -> drawAnchor(c)
             Mode.RING -> drawRing(c, ringFolder, ringAt, -1, ringPath.isNotEmpty())

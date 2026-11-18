@@ -64,12 +64,17 @@ class MainActivity : Activity() {
                 "several levels deep. Hold still to see the menu. Tap instead of flicking to get " +
                 "the menu to tap on. Tap outside or wait to close.",
         ))
+        col.addView(Button(this).apply {
+            text = "Map apps (A–Z): hold an app, draw where it goes"
+            setOnClickListener { startActivity(Intent(this@MainActivity, MapActivity::class.java)) }
+        })
         col.addView(Button(this).apply { text = "Try it here"; setOnClickListener { startActivity(FlickActivity.intent(this@MainActivity)) } })
         col.addView(Button(this).apply { text = "Add the widget"; setOnClickListener { pinWidget() } })
 
         // --- Menu editor ---
         col.addView(heading("Menu"))
-        col.addView(body("Each spot is a direction. Tap one to set an app or a folder. The middle goes back up."))
+        col.addView(body("Each spot is a direction. Tap one to set an app or a folder. The middle goes back up. " +
+            "For apps, Map apps above is quicker."))
         crumb = TextView(this).apply { textSize = 15f; setTypeface(typeface, Typeface.BOLD); setPadding(0, dp(4), 0, dp(8)) }
         col.addView(crumb)
         grid = GridLayout(this).apply { columnCount = 3; rowCount = 3 }
@@ -131,6 +136,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         Icons.clear()
+        menu = Store.menu(this) // Map apps may have changed it
         drawGrid()
         dwellButton.text = "Hold to show the menu: ${Store.dwellMs(this)} ms (tap to change)"
         sizes.text = WidgetRenderer.describeSizes(this)

@@ -37,3 +37,23 @@ fun Slot.Folder.names(path: List<Int>): List<String> {
     }
     return out
 }
+
+/** Every place each app sits in the menu: package → slot paths. */
+fun Slot.Folder.appPaths(): Map<String, List<List<Int>>> {
+    val out = LinkedHashMap<String, MutableList<List<Int>>>()
+    fun walk(f: Slot.Folder, base: List<Int>) {
+        f.slots.forEachIndexed { i, s ->
+            when (s) {
+                is Slot.App -> out.getOrPut(s.pkg) { mutableListOf() } += base + i
+                is Slot.Folder -> walk(s, base + i)
+                null -> {}
+            }
+        }
+    }
+    walk(this, emptyList())
+    return out
+}
+
+/** A spot in words: folder names, then the direction, e.g. "More › NE" or just "N". */
+fun Slot.Folder.describe(path: List<Int>): String =
+    (names(path.dropLast(1)) + Slot.DIRECTIONS[path.last()]).joinToString(" › ")

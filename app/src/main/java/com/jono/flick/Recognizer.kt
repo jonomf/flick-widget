@@ -46,7 +46,9 @@ class Recognizer(private val root: Slot.Folder, private val g: Geometry, startSh
         class Open(val folder: Slot.Folder, val at: Pt, val path: List<Int>) : Result()
         /** A plain tap: no movement, nothing chosen. */
         class Tap(val at: Pt) : Result()
-        /** The stroke went somewhere with nothing in it. */
+        /** The stroke ended on an empty spot: folder indexes, then the empty slot's index. */
+        class Spot(val path: List<Int>) : Result()
+        /** Nothing usable (only after a ring was shown and lifted outside every item). */
         object Cancel : Result()
     }
 
@@ -137,6 +139,7 @@ class Recognizer(private val root: Slot.Folder, private val g: Geometry, startSh
         return when {
             s is Slot.App -> Result.Launch(s, path + hover, root.names(path) + s.label)
             s is Slot.Folder -> Result.Open(s, cur, path + hover)
+            hover >= 0 -> Result.Spot(path + hover)
             hover == -1 && levels.size == 1 && !shown && travel < g.minStroke -> Result.Tap(trail.first())
             hover == -1 && shown -> Result.Open(folder, origin, path)
             hover == -1 && levels.size > 1 -> Result.Open(folder, origin, path)
