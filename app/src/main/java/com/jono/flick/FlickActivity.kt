@@ -201,6 +201,14 @@ class FlickActivity : Activity(), FlickView.Listener {
         overridePendingTransition(0, 0)
     }
 
+    /** While the ring is on screen, blank the widget under it so its icons don't show twice. */
+    override fun onRingShown(shown: Boolean) = WidgetRenderer.setBlank(this, shown)
+
+    override fun onDestroy() {
+        WidgetRenderer.setBlank(this, false)
+        super.onDestroy()
+    }
+
     /** True while the contact picker is on top (so leaving doesn't close us). */
     private var picking = false
 

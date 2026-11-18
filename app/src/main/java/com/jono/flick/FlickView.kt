@@ -46,6 +46,8 @@ class FlickView(
         fun onAssign(path: List<Int>) {}
         /** Normal mode: a stroke ended on an empty spot. Return true to handle it (offer to map it). */
         fun onEmptySpot(path: List<Int>): Boolean = false
+        /** The ring appeared or went away (to blank the widget under it). */
+        fun onRingShown(shown: Boolean) {}
     }
 
     /** Assign mode: the app being placed, drawn under the finger. */
@@ -71,7 +73,18 @@ class FlickView(
         startGesture(x, y, t)
     }
 
-    private enum class Mode { ARMED, GESTURE, RING, RESULT }
+    private enum class Mode { ARMED, GESTURE, RING, RESULT, DRAG }
+
+    // DRAG state (ring open by tap: press an item and move it to rearrange).
+    private var pressItem = -1            // slot index pressed in the ring, before it moves
+    private var pressAt = Recognizer.Pt(0f, 0f)
+    private var dragFrom = listOf<Int>()  // full path of the item being moved
+    private var dragItem: Slot? = null
+    private var dragAt = Recognizer.Pt(0f, 0f)
+    private var dragHover = NONE          // slot index under the finger, HUB, or NONE
+    private var dragHoverSince = 0L
+    private val slop by lazy { dp(12f) }
+    private var lastRingShown = false
 
     private val d = resources.displayMetrics.density
     private fun dp(v: Float) = v * d
@@ -211,9 +224,20 @@ class FlickView(
                 removeCallbacks(timeout)
                 removeCallbacks(autoRing)
                 if (mode == Mode.RESULT) return true
+                // Ring open by tap: pressing an item may become a drag to move it.
+                pressItem = if (mode == Mode.RING && !assign) itemAt(e.x, e.y) else -1
+                pressAt = Recognizer.Pt(e.x, e.y)
                 startGesture(e.x, e.y, e.eventTime)
             }
             MotionEvent.ACTION_MOVE -> {
+                if (mode == Mode.DRAG) {
+                    dragMove(e.x, e.y, e.eventTime)
+                    return true
+                }
+                if (pressItem >= 0 && Recognizer.dist(pressAt, Recognizer.Pt(e.x, e.y)) > slop) {
+                    startDrag(pressItem, e.x, e.y, e.eventTime)
+                    return true
+                }
                 val r = rec ?: return true
                 for (h in 0 until e.historySize) {
                     feed(r, e.getHistoricalX(h), e.getHistoricalY(h), e.getHistoricalEventTime(h))
@@ -222,13 +246,18 @@ class FlickView(
                 invalidate()
             }
             MotionEvent.ACTION_UP -> {
+                if (mode == Mode.DRAG) {
+                    drop()
+                    return true
+                }
                 val r = rec ?: return true
                 removeCallbacks(ticker)
                 finish(r, r.up(e.x, e.y, e.eventTime))
             }
             MotionEvent.ACTION_CANCEL -> {
                 removeCallbacks(ticker)
-                back()
+                removeCallbacks(dragTick)
+                if (mode == Mode.DRAG) { mode = Mode.RING; showRing(ringFolder, ringAt, ringPath) } else back()
             }
         }
         return true
@@ -331,9 +360,143 @@ class FlickView(
 
     // ---------------------------------------------------------------- drawing
 
+    // ---------------------------------------------------------------- drag to rearrange
+
+    /** Ring slot index at ([x], [y]) if an item's bubble is there, else -1. */
+    private fun itemAt(x: Float, y: Float): Int {
+        for (i in 0 until Slot.SLOTS) {
+            if (ringFolder.slots[i] == null) continue
+            val p = slotPos(ringAt, i)
+            if (Recognizer.dist(p, Recognizer.Pt(x, y)) <= bubbleR * 1.25f) return i
+        }
+        return -1
+    }
+
+    private fun slotPos(o: Recognizer.Pt, i: Int): Recognizer.Pt {
+        val a = Math.toRadians(i * 45.0)
+        return Recognizer.Pt(o.x + (ringR * sin(a)).toFloat(), o.y - (ringR * cos(a)).toFloat())
+    }
+
+    private fun startDrag(i: Int, x: Float, y: Float, t: Long) {
+        removeCallbacks(ticker)
+        removeCallbacks(timeout)
+        rec = null
+        dragFrom = ringPath + i
+        dragItem = ringFolder.slots[i]
+        pressItem = -1
+        mode = Mode.DRAG
+        buzz(HapticFeedbackConstants.LONG_PRESS)
+        dragMove(x, y, t)
+        postDelayed(dragTick, 60)
+    }
+
+    private fun dragMove(x: Float, y: Float, t: Long) {
+        dragAt = Recognizer.Pt(x, y)
+        val d = Recognizer.dist(ringAt, dragAt)
+        val h = when {
+            d < hubR -> HUB
+            d > ringR + bubbleR * 1.8f -> NONE
+            d < geo.deadZone -> NONE
+            else -> Recognizer.sector(Recognizer.angle(ringAt, dragAt))
+        }
+        if (h != dragHover) {
+            dragHover = h
+            dragHoverSince = t
+            if (h >= 0) buzz(HapticFeedbackConstants.CLOCK_TICK)
+        }
+        invalidate()
+    }
+
+    /** Holding over a folder opens it; holding over the centre goes back up a level. */
+    private val dragTick = object : Runnable {
+        override fun run() {
+            if (mode != Mode.DRAG) return
+            if (SystemClock.uptimeMillis() - dragHoverSince >= DRAG_OPEN_MS) {
+                val target = if (dragHover >= 0) ringFolder.slots[dragHover] else null
+                val into = ringPath + dragHover
+                if (target is Slot.Folder && target !== dragItem && !isInside(into, dragFrom)) {
+                    openDuringDrag(target, into)
+                } else if (dragHover == HUB && ringPath.isNotEmpty()) {
+                    openDuringDrag(root.at(ringPath.dropLast(1)) ?: root, ringPath.dropLast(1))
+                }
+            }
+            postDelayed(this, 60)
+        }
+    }
+
+    private fun openDuringDrag(f: Slot.Folder, path: List<Int>) {
+        ringFolder = f
+        ringPath = path
+        dragHover = NONE
+        dragHoverSince = SystemClock.uptimeMillis()
+        buzz(HapticFeedbackConstants.CONFIRM)
+        invalidate()
+    }
+
+    /** True when [path] is [ancestor] or somewhere inside it. */
+    private fun isInside(path: List<Int>, ancestor: List<Int>) =
+        path.size >= ancestor.size && path.subList(0, ancestor.size) == ancestor
+
+    /**
+     * Let go: on an empty spot, move it there; on a folder, into that folder (same direction
+     * if free, else its first free spot); on another item, swap them. Anywhere else: no change.
+     */
+    private fun drop() {
+        removeCallbacks(dragTick)
+        val item = dragItem
+        val srcParent = root.at(dragFrom.dropLast(1))
+        val srcIdx = dragFrom.last()
+        val h = dragHover
+        mode = Mode.RING
+        var msg: String? = null
+        if (item != null && srcParent != null && h >= 0 && srcParent.slots[srcIdx] === item) {
+            val target = ringFolder.slots[h]
+            val here = ringPath + h
+            when {
+                here == dragFrom -> {}
+                target == null && !isInside(here, dragFrom) -> {
+                    srcParent.slots[srcIdx] = null
+                    ringFolder.slots[h] = item
+                    msg = "Moved ${item.label}"
+                }
+                target is Slot.Folder && target !== item && !isInside(here, dragFrom) -> {
+                    val spot = if (target.slots[h] == null) h else target.slots.indexOfFirst { it == null }
+                    if (spot < 0) {
+                        msg = "${target.name} is full"
+                    } else {
+                        srcParent.slots[srcIdx] = null
+                        target.slots[spot] = item
+                        msg = "${item.label} → ${target.name}"
+                    }
+                }
+                target != null && target !is Slot.Folder && !isInside(here, dragFrom) -> {
+                    // Swap places.
+                    srcParent.slots[srcIdx] = target
+                    ringFolder.slots[h] = item
+                    msg = "Swapped ${item.label} and ${target.label}"
+                }
+            }
+        }
+        dragItem = null
+        if (msg != null) {
+            Store.saveMenu(context, root)
+            WidgetRenderer.renderAll(context)
+            buzz(HapticFeedbackConstants.CONFIRM)
+            resultHint = msg
+            postDelayed({ resultHint = null; invalidate() }, 1400)
+        }
+        showRing(ringFolder, ringAt, ringPath)
+    }
+
+    private var resultHint: String? = null
+
     override fun onDraw(c: Canvas) {
         val r = rec
-        val ringVisible = mode == Mode.RING || (mode == Mode.GESTURE && r?.shown == true)
+        val ringVisible = mode == Mode.RING || mode == Mode.DRAG || (mode == Mode.GESTURE && r?.shown == true)
+        if (ringVisible != lastRingShown) {
+            lastRingShown = ringVisible
+            post { listener.onRingShown(ringVisible) }
+        }
         c.drawColor(Color.argb(if (ringVisible) 110 else if (mode == Mode.GESTURE) 40 else 18, 0, 0, 0))
 
         carry?.let { item ->
@@ -349,7 +512,23 @@ class FlickView(
         }
         when (mode) {
             Mode.ARMED -> drawAnchor(c)
-            Mode.RING -> drawRing(c, ringFolder, ringAt, -1, ringPath.isNotEmpty())
+            Mode.RING -> {
+                drawRing(c, ringFolder, ringAt, -1, ringPath.isNotEmpty())
+                resultHint?.let { drawChip(c, ringAt.x, ringAt.y + ringR + bubbleR + dp(40f), it, text, 260f) }
+            }
+            Mode.DRAG -> {
+                val skip = if (ringPath == dragFrom.dropLast(1)) dragFrom.last() else -1
+                drawRing(c, ringFolder, ringAt, dragHover, ringPath.isNotEmpty(), skip)
+                if (dragHover == HUB && ringPath.isNotEmpty()) {
+                    outline.color = accent
+                    outline.alpha = 255
+                    c.drawCircle(ringAt.x, ringAt.y, hubR, outline)
+                }
+                dragItem?.let {
+                    val size = iconSize * 1.25f
+                    Icons.draw(context, c, it, dragAt.x - size / 2, dragAt.y - size / 2 - dp(36f), size)
+                }
+            }
             Mode.GESTURE -> if (r != null) drawGesture(c, r)
             Mode.RESULT -> drawChip(c, width / 2f, height / 2f, resultText, bigText)
         }
@@ -405,11 +584,11 @@ class FlickView(
         }
     }
 
-    private fun drawRing(c: Canvas, f: Slot.Folder, o: Recognizer.Pt, hover: Int, nested: Boolean) {
+    private fun drawRing(c: Canvas, f: Slot.Folder, o: Recognizer.Pt, hover: Int, nested: Boolean, skip: Int = -1) {
         // Hub: folder name, "‹" when tapping it goes back up.
         fill.color = surface
         c.drawCircle(o.x, o.y, hubR, fill)
-        val hubLabel = if (nested && mode == Mode.RING) "‹ ${f.name}" else f.name
+        val hubLabel = if (nested && (mode == Mode.RING || mode == Mode.DRAG)) "‹ ${f.name}" else f.name
         val t = TextUtils.ellipsize(hubLabel, text, hubR * 2.6f, TextUtils.TruncateAt.END).toString()
         c.drawText(t, o.x, o.y + text.textSize / 3, text)
 
@@ -417,7 +596,7 @@ class FlickView(
             val a = Math.toRadians(i * 45.0)
             val x = o.x + (ringR * sin(a)).toFloat()
             val y = o.y - (ringR * cos(a)).toFloat()
-            val s = f.slots[i]
+            val s = if (i == skip) null else f.slots[i]
             if (s == null) {
                 // Empty spot: a small dot (style is a setting), bigger when pointed at.
                 val on = i == hover
@@ -476,5 +655,12 @@ class FlickView(
         c.drawRoundRect(RectF(x - w / 2 - padH, y - h / 2, x + w / 2 + padH, y + h / 2), h / 2, h / 2, fill)
         fill.alpha = 255
         c.drawText(t, x, y + p.textSize / 3, p)
+    }
+
+    companion object {
+        private const val NONE = -1
+        private const val HUB = -2
+        /** Hold over a folder (or the centre) this long while dragging to open it (or go up). */
+        private const val DRAG_OPEN_MS = 450L
     }
 }

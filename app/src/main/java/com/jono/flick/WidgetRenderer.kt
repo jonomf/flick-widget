@@ -71,6 +71,16 @@ object WidgetRenderer {
     /** Folders are tiny radial menus of 8 icons, so they get more pixels. */
     private const val FOLDER_PX = 144
 
+    /** True while the flick ring is open over the widget: the widget is drawn blank. */
+    private var blank = false
+
+    /** Blanks the widget (ring open over it) or brings it back. */
+    fun setBlank(ctx: Context, on: Boolean) {
+        if (blank == on) return
+        blank = on
+        renderAll(ctx)
+    }
+
     fun renderAll(ctx: Context) {
         val mgr = AppWidgetManager.getInstance(ctx)
         val ids = mgr.getAppWidgetIds(ComponentName(ctx, FlickWidget::class.java))
@@ -98,6 +108,10 @@ object WidgetRenderer {
         bmp: (Slot) -> Bitmap, recentBmp: (String) -> Bitmap,
     ): RemoteViews {
         val rv = RemoteViews(ctx.packageName, k.layout)
+        val vis = if (blank) View.INVISIBLE else View.VISIBLE
+        rv.setViewVisibility(R.id.content, vis)
+        if (k != Kind.TILE) rv.setViewVisibility(R.id.bg, vis)
+        if (blank) return rv
         val hubIntent = mutable(ctx, 1, FlickActivity.intent(ctx))
         rv.setOnClickPendingIntent(R.id.hub, hubIntent)
 

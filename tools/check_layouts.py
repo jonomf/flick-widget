@@ -57,7 +57,7 @@ def main():
             errors.append(f"{name}: missing layout {layout}.xml")
             continue
         have = ids_in(path)
-        need = {"hub", "update"}
+        need = {"hub", "update", "content"} | ({"bg"} if layout != "widget_tile" else set())
         for c in range(cells):
             need |= {f"c{c}", f"c{c}i"} | ({f"c{c}t"} if labels else set())
         for r in range(recents):
