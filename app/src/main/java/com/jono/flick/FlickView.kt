@@ -616,7 +616,7 @@ class FlickView(
             lastRingShown = ringVisible
             post { listener.onRingShown(ringVisible) }
         }
-        c.drawColor(Color.argb(if (ringVisible) 110 else if (mode == Mode.GESTURE) 40 else 18, 0, 0, 0))
+        c.drawColor(Color.argb(if (ringVisible) 190 else if (mode == Mode.GESTURE) 60 else 18, 0, 0, 0))
 
         carry?.let { item ->
             // The app being placed: above the ring, or under the finger while drawing.
