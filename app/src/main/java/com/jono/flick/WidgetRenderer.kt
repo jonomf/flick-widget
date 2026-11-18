@@ -39,7 +39,7 @@ object WidgetRenderer {
         val cells: Int, val ring: Boolean, val labels: Boolean, val recents: Int,
     ) {
         TILE(R.layout.widget_tile, SizeF(50f, 50f), "hub", cells = 0, ring = false, labels = false, recents = 0),
-        ROW_S(R.layout.widget_row_s, SizeF(150f, 50f), "hub + 3 items", cells = 3, ring = false, labels = false, recents = 0),
+        ROW_S(R.layout.widget_row_s, SizeF(150f, 50f), "2 items | hub | 2 items", cells = 4, ring = false, labels = false, recents = 0),
         ROW(R.layout.widget_row, SizeF(220f, 50f), "hub + 5 items", cells = 5, ring = false, labels = false, recents = 0),
         ROW_L(R.layout.widget_row_l, SizeF(320f, 50f), "hub + 8 items", cells = 8, ring = false, labels = false, recents = 0),
         COLUMN(R.layout.widget_column, SizeF(50f, 120f), "hub + 3 items stacked", cells = 3, ring = false, labels = false, recents = 0),

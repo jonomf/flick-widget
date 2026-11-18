@@ -367,8 +367,9 @@ class FlickView(
         if (r.shown) {
             drawRing(c, r.folder, r.origin, r.hover, r.levels.size > 1 || gestureBase.isNotEmpty())
         } else {
-            // Flicking: show only the item being pointed at, next to the finger.
-            val s = r.hovered
+            // Flicking: show only what letting go would pick, next to the finger. Pointing at a
+            // folder shows what's in that same direction inside it (folders it passes through first).
+            val (s, via) = r.flickTarget()
             if (r.hover >= 0) {
                 val p = r.point
                 val y = p.y - dp(64f)
@@ -376,7 +377,12 @@ class FlickView(
                     fill.color = surface
                     c.drawCircle(p.x, y, bubbleR, fill)
                     Icons.draw(context, c, s, p.x - iconSize / 2, y - iconSize / 2, iconSize)
-                    drawChip(c, p.x, y + bubbleR + dp(14f), s.label + if (s is Slot.Folder) " ›" else "", text)
+                    drawChip(c, p.x, y + bubbleR + dp(14f), (via + s.label).joinToString(" › "), text, 240f)
+                } else if (via.isNotEmpty()) {
+                    outline.color = onSurface
+                    outline.alpha = 90
+                    c.drawCircle(p.x, y, bubbleR * 0.6f, outline)
+                    drawChip(c, p.x, y + bubbleR + dp(14f), (via + "empty").joinToString(" › "), text, 240f)
                 } else {
                     outline.color = onSurface
                     outline.alpha = 90
@@ -421,8 +427,8 @@ class FlickView(
     }
 
     /** Text on a small rounded backing so it reads over any wallpaper. */
-    private fun drawChip(c: Canvas, x: Float, y: Float, label: String, p: TextPaint) {
-        val maxW = min(width * 0.9f, if (p === bigText) width * 0.9f else dp(96f))
+    private fun drawChip(c: Canvas, x: Float, y: Float, label: String, p: TextPaint, maxDp: Float = 96f) {
+        val maxW = min(width * 0.9f, if (p === bigText) width * 0.9f else dp(maxDp))
         val t = TextUtils.ellipsize(label, p, maxW, TextUtils.TruncateAt.END).toString()
         val w = p.measureText(t)
         val padH = dp(6f)

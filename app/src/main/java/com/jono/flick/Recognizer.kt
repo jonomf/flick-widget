@@ -133,9 +133,38 @@ class Recognizer(private val root: Slot.Folder, private val g: Geometry, startSh
         return true
     }
 
+    /**
+     * While flicking: what letting go now would pick, following folders in the same direction.
+     * The slot (an app, or null for an empty spot) and the folder names passed on the way.
+     */
+    fun flickTarget(): Pair<Slot?, List<String>> {
+        var s = hovered
+        val names = mutableListOf<String>()
+        if (shown || hover < 0) return s to names
+        while (s is Slot.Folder) {
+            names += s.name
+            s = s.slots[hover]
+        }
+        return s to names
+    }
+
     fun up(x: Float, y: Float, t: Long): Result {
         if (x != cur.x || y != cur.y) move(x, y, t)
         val s = hovered
+        // Flicked into a folder and let go: keep going the same way, through any folders, to
+        // the app (or empty spot) in that direction.
+        if (!shown && s is Slot.Folder) {
+            var f: Slot.Folder = s
+            var p = path + hover
+            while (true) {
+                val np = p + hover
+                when (val n = f.slots[hover]) {
+                    is Slot.Folder -> { f = n; p = np }
+                    is Slot.App -> return Result.Launch(n, np, root.names(p) + n.label)
+                    null -> return Result.Spot(np)
+                }
+            }
+        }
         return when {
             s is Slot.App -> Result.Launch(s, path + hover, root.names(path) + s.label)
             s is Slot.Folder -> Result.Open(s, cur, path + hover)

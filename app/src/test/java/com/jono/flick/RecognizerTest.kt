@@ -15,8 +15,12 @@ class RecognizerTest {
             slots[4] = Slot.App("p.b", "b")
             slots[6] = Slot.App("p.c", "c")
         }
+        // NE = X { NE = Y { NE = app "z" } }: a chain of folders in one direction.
+        val y = Slot.Folder("Y").apply { slots[1] = Slot.App("p.z", "z") }
+        val x = Slot.Folder("X").apply { slots[1] = y }
         return Slot.Folder("Root").apply {
             slots[0] = Slot.App("p.a", "a")
+            slots[1] = x
             slots[2] = more
         }
     }
@@ -123,12 +127,31 @@ class RecognizerTest {
         assertEquals("p.b", (res as Recognizer.Result.Launch).app.pkg)
     }
 
-    @Test fun liftOnFolderOpensItsRing() {
+    @Test fun flickIntoFolderAndLiftKeepsDirection() {
+        // E into More; More's E is empty, so it's that empty spot.
         val r = Recognizer(menu(), g)
         val res = stroke(r, 0f to 0f, 100f to 0f)
-        assertTrue(res is Recognizer.Result.Open)
+        assertEquals(listOf(2, 2), (res as Recognizer.Result.Spot).path)
+        // NE through X and Y to "z".
+        val r2 = Recognizer(menu(), g)
+        val res2 = stroke(r2, 0f to 0f, 70f to -70f)
+        res2 as Recognizer.Result.Launch
+        assertEquals("p.z", res2.app.pkg)
+        assertEquals(listOf(1, 1, 1), res2.path)
+        assertEquals(listOf("X", "Y", "z"), res2.names)
+        // Zigzag E into More, then N into Deeper and lift: Deeper's N is empty.
+        val r3 = Recognizer(menu(), g)
+        val res3 = stroke(r3, 0f to 0f, 100f to 0f, 100f to -100f)
+        assertEquals(listOf(2, 0, 0), (res3 as Recognizer.Result.Spot).path)
+    }
+
+    @Test fun liftOnFolderWithRingShownOpensIt() {
+        val r = Recognizer(menu(), g)
+        r.down(0f, 0f, 0)
+        assertTrue(r.tick(320))
+        r.move(100f, 0f, 340)
+        val res = r.up(100f, 0f, 350)
         assertEquals("More", (res as Recognizer.Result.Open).folder.name)
-        assertEquals(listOf(2), res.path)
     }
 
     @Test fun emptyDirectionIsASpot() {

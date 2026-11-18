@@ -56,6 +56,18 @@ def row(n):
     </LinearLayout>'''
 
 
+def row_centred(left, right):
+    """Hub in the middle: cells 0..left-1 before it, the rest after."""
+    before = "\n".join(cell(i, False) for i in range(left))
+    after = "\n".join(cell(i, False) for i in range(left, left + right))
+    return f'''    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="horizontal" android:gravity="center_vertical">
+{indent(before, 8)}
+{indent(hub(extra=' android:layout_marginStart="4dp" android:layout_marginEnd="4dp"'), 8)}
+{indent(after, 8)}
+    </LinearLayout>'''
+
+
 def column(n):
     cells = "\n".join(cell(i, False, "v") for i in range(n))
     return f'''    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
@@ -123,7 +135,7 @@ def wide():
 
 LAYOUTS = {
     "widget_tile": f'    {hub("match_parent", "match_parent")}',
-    "widget_row_s": row(3),
+    "widget_row_s": row_centred(2, 2),
     "widget_row": row(5),
     "widget_row_l": row(8),
     "widget_column": column(3),
