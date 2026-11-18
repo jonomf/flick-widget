@@ -288,15 +288,28 @@ class FlickView(
         return true
     }
 
+    /** The current stroke started on the centre of an open ring. */
+    private var centreStart = false
+
     private fun startGesture(x: Float, y: Float, t: Long) {
         gestureFrom = mode
         val p = Recognizer.Pt(x, y)
         val r: Recognizer
+        centreStart = false
         if (mode == Mode.RING) {
-            val inside = Recognizer.dist(p, ringAt) <= ringR + bubbleR * 1.6f
+            val d = Recognizer.dist(p, ringAt)
+            val inside = d <= ringR + bubbleR * 1.6f
             startedOutside = !inside
-            r = Recognizer(ringFolder, geo, startShown = inside)
-            r.down(x, y, t, if (inside) ringAt else null)
+            if (d <= hubR * 1.5f && !assign) {
+                // From the centre of an open ring: a full gesture (flicks, zigzags into folders),
+                // measured from the ring's centre.
+                centreStart = true
+                r = Recognizer(ringFolder, geo)
+                r.down(x, y, t, ringAt)
+            } else {
+                r = Recognizer(ringFolder, geo, startShown = inside)
+                r.down(x, y, t, if (inside) ringAt else null)
+            }
             gestureBase = ringPath
         } else {
             startedOutside = false
@@ -356,6 +369,9 @@ class FlickView(
                 // Just armed: a tap (not a flick) closes. In the drawer, holding still then
                 // letting go shows the ring to tap a spot on.
                 gestureFrom == Mode.ARMED -> if (assign) showRing(root, res.at, emptyList()) else listener.onClose()
+                // Tap on the centre: up a level, or close at the top (as before).
+                centreStart -> if (ringPath.isEmpty()) listener.onClose()
+                    else showRing(root.at(ringPath.dropLast(1)) ?: root, ringAt, ringPath.dropLast(1))
                 else -> back()
             }
             is Recognizer.Result.Spot -> if (assign) {
@@ -584,6 +600,7 @@ class FlickView(
     override fun onDraw(c: Canvas) {
         val r = rec
         val ringVisible = mode == Mode.RING || mode == Mode.DRAG || (mode == Mode.GESTURE && r?.shown == true) ||
+            (mode == Mode.GESTURE && gestureFrom == Mode.RING && centreStart) ||
             (mode == Mode.ARMED && preBlanked)
         if (ringVisible != lastRingShown) {
             lastRingShown = ringVisible
@@ -622,7 +639,15 @@ class FlickView(
                     Icons.draw(context, c, it, dragAt.x - size / 2, dragAt.y - size / 2 - dp(36f), size)
                 }
             }
-            Mode.GESTURE -> if (r != null) drawGesture(c, r)
+            Mode.GESTURE -> if (r != null) {
+                // Flicking from the centre of an open ring: keep the ring faintly behind the trail.
+                if (gestureFrom == Mode.RING && centreStart && !r.shown) {
+                    val save = c.saveLayerAlpha(null, 90)
+                    drawRing(c, ringFolder, ringAt, if (r.levels.size == 1) r.hover else -1, ringPath.isNotEmpty())
+                    c.restoreToCount(save)
+                }
+                drawGesture(c, r)
+            }
             Mode.RESULT -> drawChip(c, width / 2f, height / 2f, resultText, bigText)
         }
     }
