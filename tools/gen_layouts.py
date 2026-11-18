@@ -68,6 +68,22 @@ def row_centred(left, right):
     </LinearLayout>'''
 
 
+def row_stacked():
+    """2x1: two cells stacked on each side of the hub (cells 0,1 left; 2,3 right)."""
+    def side(a, b):
+        return f'''<LinearLayout android:layout_width="0dp" android:layout_height="match_parent"
+    android:layout_weight="1" android:orientation="vertical">
+{indent(cell(a, False, "v"), 4)}
+{indent(cell(b, False, "v"), 4)}
+</LinearLayout>'''
+    return f'''    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="horizontal" android:gravity="center_vertical">
+{indent(side(0, 1), 8)}
+{indent(hub(extra=' android:layout_marginStart="4dp" android:layout_marginEnd="4dp"'), 8)}
+{indent(side(2, 3), 8)}
+    </LinearLayout>'''
+
+
 def column(n):
     cells = "\n".join(cell(i, False, "v") for i in range(n))
     return f'''    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
@@ -135,7 +151,7 @@ def wide():
 
 LAYOUTS = {
     "widget_tile": f'    {hub("match_parent", "match_parent")}',
-    "widget_row_s": row_centred(2, 2),
+    "widget_row_s": row_stacked(),
     "widget_row": row(5),
     "widget_row_l": row(8),
     "widget_column": column(3),

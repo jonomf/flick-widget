@@ -20,6 +20,8 @@ class FlickWidget : AppWidgetProvider() {
 
     override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, opts: Bundle) =
         WidgetRenderer.renderAll(ctx)
+
+    override fun onDisabled(ctx: Context) = RefreshJob.cancel(ctx)
 }
 
 /**
@@ -39,7 +41,7 @@ object WidgetRenderer {
         val cells: Int, val ring: Boolean, val labels: Boolean, val recents: Int,
     ) {
         TILE(R.layout.widget_tile, SizeF(50f, 50f), "hub", cells = 0, ring = false, labels = false, recents = 0),
-        ROW_S(R.layout.widget_row_s, SizeF(150f, 50f), "2 items | hub | 2 items", cells = 4, ring = false, labels = false, recents = 0),
+        ROW_S(R.layout.widget_row_s, SizeF(150f, 50f), "2 recent apps | hub | 2 recent apps", cells = 4, ring = false, labels = false, recents = 0),
         ROW(R.layout.widget_row, SizeF(220f, 50f), "hub + 5 items", cells = 5, ring = false, labels = false, recents = 0),
         ROW_L(R.layout.widget_row_l, SizeF(320f, 50f), "hub + 8 items", cells = 8, ring = false, labels = false, recents = 0),
         COLUMN(R.layout.widget_column, SizeF(50f, 120f), "hub + 3 items stacked", cells = 3, ring = false, labels = false, recents = 0),
@@ -50,7 +52,10 @@ object WidgetRenderer {
         TALL(R.layout.widget_tall, SizeF(150f, 205f), "ring + 3 recent", cells = 8, ring = true, labels = false, recents = 3),
         RING_L(R.layout.widget_ring_l, SizeF(250f, 205f), "labelled ring", cells = 8, ring = true, labels = true, recents = 0),
         XL_WIDE(R.layout.widget_xl_wide, SizeF(340f, 205f), "labelled ring | 4 recent", cells = 8, ring = true, labels = true, recents = 4),
-        XL(R.layout.widget_xl, SizeF(260f, 270f), "labelled ring + 3 recent", cells = 8, ring = true, labels = true, recents = 3),
+        XL(R.layout.widget_xl, SizeF(260f, 270f), "labelled ring + 3 recent", cells = 8, ring = true, labels = true, recents = 3);
+
+        /** Cells show the apps you used last (2×1), not menu items. */
+        val recentApps: Boolean get() = this == ROW_S
     }
 
     private val CELL = intArrayOf(R.id.c0, R.id.c1, R.id.c2, R.id.c3, R.id.c4, R.id.c5, R.id.c6, R.id.c7)
@@ -68,6 +73,7 @@ object WidgetRenderer {
         val mgr = AppWidgetManager.getInstance(ctx)
         val ids = mgr.getAppWidgetIds(ComponentName(ctx, FlickWidget::class.java))
         if (ids.isEmpty()) return
+        RefreshJob.ensure(ctx)
         Icons.clear()
         val menu = Store.menu(ctx)
         val recents = Store.recents(ctx)
@@ -77,19 +83,43 @@ object WidgetRenderer {
         val recentBitmaps = HashMap<String, Bitmap>()
         fun recentBmp(pkg: String) = recentBitmaps.getOrPut(pkg) { Icons.bitmap(ctx, Slot.App(pkg, ""), ICON_PX) }
 
+        val lastApps = RecentApps.get(ctx, Store.launchableApps(ctx), 4)
+
         val views = RemoteViews(Kind.values().associate { k ->
-            k.size to fill(ctx, k, menu, recents, ::bmp, ::recentBmp)
+            k.size to fill(ctx, k, menu, recents, lastApps, ::bmp, ::recentBmp)
         })
         mgr.updateAppWidget(ids, views)
     }
 
     private fun fill(
-        ctx: Context, k: Kind, menu: Slot.Folder, recents: List<Store.Recent>,
+        ctx: Context, k: Kind, menu: Slot.Folder, recents: List<Store.Recent>, lastApps: List<Slot.App>,
         bmp: (Slot) -> Bitmap, recentBmp: (String) -> Bitmap,
     ): RemoteViews {
         val rv = RemoteViews(ctx.packageName, k.layout)
         val hubIntent = mutable(ctx, 1, FlickActivity.intent(ctx))
         rv.setOnClickPendingIntent(R.id.hub, hubIntent)
+
+        if (k.recentApps) {
+            for (c in 0 until k.cells) {
+                val app = lastApps.getOrNull(c)
+                if (app == null) {
+                    rv.setViewVisibility(CELL[c], View.INVISIBLE)
+                    continue
+                }
+                rv.setViewVisibility(CELL[c], View.VISIBLE)
+                rv.setImageViewBitmap(CELL_ICON[c], recentBmp(app.pkg))
+                rv.setContentDescription(CELL[c], app.label)
+                rv.setOnClickPendingIntent(
+                    CELL[c],
+                    PendingIntent.getActivity(
+                        ctx, 600 + c, LaunchActivity.intent(ctx, app.pkg, app.label, ""),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                )
+            }
+            bindUpdate(ctx, rv)
+            return rv
+        }
 
         // Which top-level slot each cell shows.
         val slotFor: List<Int?> = if (k.ring) {
@@ -101,9 +131,17 @@ object WidgetRenderer {
         for (c in 0 until k.cells) {
             val i = slotFor[c]
             val s = if (i != null) menu.slots[i] else null
+            if (i != null && s == null && k.ring) {
+                // Empty compass spot: a small dot; tap it to put an app there.
+                rv.setViewVisibility(CELL[c], View.VISIBLE)
+                rv.setImageViewResource(CELL_ICON[c], R.drawable.empty_dot)
+                rv.setContentDescription(CELL[c], "Empty ${Slot.DIRECTIONS[i]}")
+                if (k.labels) rv.setTextViewText(CELL_TEXT[c], "")
+                rv.setOnClickPendingIntent(CELL[c], mutable(ctx, 500 + i, FlickActivity.emptyIntent(ctx, listOf(i))))
+                continue
+            }
             if (i == null || s == null) {
-                // Empty compass spot keeps its place in the ring; elsewhere the cell goes away.
-                rv.setViewVisibility(CELL[c], if (k.ring) View.INVISIBLE else View.GONE)
+                rv.setViewVisibility(CELL[c], View.GONE)
                 continue
             }
             rv.setViewVisibility(CELL[c], View.VISIBLE)
@@ -141,7 +179,12 @@ object WidgetRenderer {
             rv.setOnClickPendingIntent(REC_PIP[r], mutable(ctx, 400 + r, FlickActivity.assignIntent(ctx, item.pkg, item.label)))
         }
 
-        // Update symbol when the Widget Updater reports a newer build. Tap: update.
+        bindUpdate(ctx, rv)
+        return rv
+    }
+
+    /** Update symbol when the Widget Updater reports a newer build. Tap: update. */
+    private fun bindUpdate(ctx: Context, rv: RemoteViews) {
         val updater = if (UpdateStatus.available(ctx)) UpdateStatus.updaterIntent(ctx) else null
         if (updater != null) {
             rv.setViewVisibility(R.id.update, View.VISIBLE)
@@ -152,7 +195,6 @@ object WidgetRenderer {
         } else {
             rv.setViewVisibility(R.id.update, View.GONE)
         }
-        return rv
     }
 
     /**

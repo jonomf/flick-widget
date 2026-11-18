@@ -406,10 +406,15 @@ class FlickView(
             val y = o.y - (ringR * cos(a)).toFloat()
             val s = f.slots[i]
             if (s == null) {
-                fill.color = surface
-                fill.alpha = if (i == hover) 200 else 90
-                c.drawCircle(x, y, dp(6f), fill)
+                // Empty spot: a small dot, so you can see the position (and aim for it to map it).
+                val on = i == hover
+                fill.color = if (on) highlight else surface
+                fill.alpha = 235
+                c.drawCircle(x, y, if (on) dp(11f) else dp(7f), fill)
                 fill.alpha = 255
+                outline.color = onSurface
+                outline.alpha = if (on) 200 else 120
+                c.drawCircle(x, y, if (on) dp(11f) else dp(7f), outline)
                 continue
             }
             val on = i == hover

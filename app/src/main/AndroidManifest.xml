@@ -77,6 +77,12 @@
             <meta-data android:name="com.jono.widgets.asset" android:value="flick-widget.apk" />
         </receiver>
 
+        <!-- Redraws the widget every ~15 minutes (keeps the 2×1's last-used apps current). -->
+        <service
+            android:name=".RefreshJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <receiver
             android:name=".FlickWidget"
             android:exported="false"

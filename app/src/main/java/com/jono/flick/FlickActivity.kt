@@ -52,12 +52,19 @@ class FlickActivity : Activity(), FlickView.Listener {
         val sx = bounds?.exactCenterX() ?: (dm.widthPixels / 2f)
         val sy = bounds?.exactCenterY() ?: (dm.heightPixels * 0.7f)
         val path = i.getIntArrayExtra(EXTRA_PATH)?.toList().orEmpty()
+        val empty = i.getIntArrayExtra(EXTRA_EMPTY)?.toList()
         // Source bounds are screen coordinates; convert once the view is laid out.
         view.post {
             val loc = IntArray(2)
             view.getLocationOnScreen(loc)
             val at = Recognizer.Pt(sx - loc[0], sy - loc[1])
-            if (path.isEmpty() && assignApp == null) view.arm(at) else view.openRing(path, at)
+            when {
+                // An empty dot on the widget: offer to put an app there (if it's still empty).
+                empty != null && Store.menu(this).at(empty.dropLast(1))?.slots?.getOrNull(empty.last()) == null ->
+                    onEmptySpot(empty)
+                path.isEmpty() && assignApp == null -> view.arm(at)
+                else -> view.openRing(path, at)
+            }
         }
     }
 
@@ -172,6 +179,11 @@ class FlickActivity : Activity(), FlickView.Listener {
 
     companion object {
         const val EXTRA_PATH = "path"
+        private const val EXTRA_EMPTY = "empty"
+
+        /** An empty spot tapped on the widget: straight to the app picker for it. */
+        fun emptyIntent(ctx: Context, path: List<Int>): Intent =
+            intent(ctx).putExtra(EXTRA_EMPTY, path.toIntArray())
         private const val EXTRA_ASSIGN_PKG = "assign_pkg"
         private const val EXTRA_ASSIGN_LABEL = "assign_label"
 

@@ -7,23 +7,29 @@
     android:padding="5dp">
     <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
         android:orientation="horizontal" android:gravity="center_vertical">
-        <LinearLayout android:id="@+id/c0" style="@style/Cell"
-            android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1">
-            <ImageView android:id="@+id/c0i" style="@style/CellIcon" />
-        </LinearLayout>
-        <LinearLayout android:id="@+id/c1" style="@style/Cell"
-            android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1">
-            <ImageView android:id="@+id/c1i" style="@style/CellIcon" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:orientation="vertical">
+            <LinearLayout android:id="@+id/c0" style="@style/Cell"
+                android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                <ImageView android:id="@+id/c0i" style="@style/CellIcon" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/c1" style="@style/Cell"
+                android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                <ImageView android:id="@+id/c1i" style="@style/CellIcon" />
+            </LinearLayout>
         </LinearLayout>
         <ImageView android:id="@+id/hub" style="@style/Hub"
             android:layout_width="wrap_content" android:layout_height="match_parent" android:layout_marginStart="4dp" android:layout_marginEnd="4dp" />
-        <LinearLayout android:id="@+id/c2" style="@style/Cell"
-            android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1">
-            <ImageView android:id="@+id/c2i" style="@style/CellIcon" />
-        </LinearLayout>
-        <LinearLayout android:id="@+id/c3" style="@style/Cell"
-            android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1">
-            <ImageView android:id="@+id/c3i" style="@style/CellIcon" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:orientation="vertical">
+            <LinearLayout android:id="@+id/c2" style="@style/Cell"
+                android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                <ImageView android:id="@+id/c2i" style="@style/CellIcon" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/c3" style="@style/Cell"
+                android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                <ImageView android:id="@+id/c3i" style="@style/CellIcon" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
     <ImageView android:id="@+id/update" style="@style/UpdateSymbol" android:layout_gravity="top|end" />

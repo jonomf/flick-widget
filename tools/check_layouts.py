@@ -17,7 +17,7 @@ A = "{http://schemas.android.com/apk/res/android}"
 
 KIND = re.compile(
     r'^\s*(\w+)\(R\.layout\.(\w+), SizeF\(([\d.]+)f, ([\d.]+)f\), "[^"]*", cells = (\d+), '
-    r'ring = (true|false), labels = (true|false), recents = (\d+)\),', re.M)
+    r'ring = (true|false), labels = (true|false), recents = (\d+)\)[,;]', re.M)
 
 # What a size on a typical 4-column grid reports (portrait min width × max height), and what
 # we expect each to get. Two kinds tying or a surprise here fails the check.
