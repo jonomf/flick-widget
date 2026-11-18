@@ -94,6 +94,7 @@ def recents(n, w="match_parent", h="wrap_content", weight=""):
         <TextView android:id="@+id/r{i}t" style="@style/RecentTitle" />
         <TextView android:id="@+id/r{i}s" style="@style/RecentSub" />
     </LinearLayout>
+    <ImageView android:id="@+id/r{i}p" style="@style/RemapPip" />
 </LinearLayout>''')
     return f'''<LinearLayout android:layout_width="{w}" android:layout_height="{h}"{weight}
     android:orientation="vertical" android:paddingStart="4dp" android:paddingEnd="4dp">

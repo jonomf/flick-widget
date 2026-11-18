@@ -22,20 +22,22 @@ class FlickActivity : Activity(), FlickView.Listener {
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
-        view = FlickView(this, Store.menu(this), this)
-        setContentView(view)
         start(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        view = FlickView(this, Store.menu(this), this)
-        setContentView(view)
         start(intent)
     }
 
+    /** Set when a widget's remap pip opened us: the tapped spot gets this app. */
+    private var assignApp: Slot.App? = null
+
     private fun start(i: Intent) {
+        assignApp = i.getStringExtra(EXTRA_ASSIGN_PKG)?.let { Slot.App(it, i.getStringExtra(EXTRA_ASSIGN_LABEL) ?: it) }
+        view = FlickView(this, Store.menu(this), this, assign = assignApp != null).apply { carry = assignApp }
+        setContentView(view)
         val bounds: Rect? = i.sourceBounds
         val dm = resources.displayMetrics
         val sx = bounds?.exactCenterX() ?: (dm.widthPixels / 2f)
@@ -46,7 +48,7 @@ class FlickActivity : Activity(), FlickView.Listener {
             val loc = IntArray(2)
             view.getLocationOnScreen(loc)
             val at = Recognizer.Pt(sx - loc[0], sy - loc[1])
-            if (path.isEmpty()) view.arm(at) else view.openRing(path, at)
+            if (path.isEmpty() && assignApp == null) view.arm(at) else view.openRing(path, at)
         }
     }
 
@@ -67,6 +69,24 @@ class FlickActivity : Activity(), FlickView.Listener {
         overridePendingTransition(0, 0)
     }
 
+    /** Remap pip: put the app on the chosen spot (an app there is replaced; folders stay). */
+    override fun onAssign(path: List<Int>) {
+        val app = assignApp ?: return
+        val menu = Store.menu(this)
+        val folder = menu.at(path.dropLast(1)) ?: return
+        val old = folder.slots[path.last()]
+        if (old !is Slot.Folder) {
+            folder.slots[path.last()] = app
+            Store.saveMenu(this, menu)
+            WidgetRenderer.renderAll(this)
+            val where = menu.describe(path)
+            val msg = if (old is Slot.App && old.pkg != app.pkg) "${app.label} → $where (was ${old.label})"
+            else "${app.label} → $where"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+        onClose()
+    }
+
     override fun onClose() {
         finish()
         @Suppress("DEPRECATION")
@@ -81,6 +101,12 @@ class FlickActivity : Activity(), FlickView.Listener {
 
     companion object {
         const val EXTRA_PATH = "path"
+        private const val EXTRA_ASSIGN_PKG = "assign_pkg"
+        private const val EXTRA_ASSIGN_LABEL = "assign_label"
+
+        /** Opens the top ring to choose where [pkg] goes (the widget's remap pip). */
+        fun assignIntent(ctx: Context, pkg: String, label: String): Intent =
+            intent(ctx).putExtra(EXTRA_ASSIGN_PKG, pkg).putExtra(EXTRA_ASSIGN_LABEL, label)
 
         fun intent(ctx: Context, path: List<Int> = emptyList()): Intent =
             Intent(ctx, FlickActivity::class.java)

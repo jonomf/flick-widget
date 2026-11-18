@@ -71,6 +71,7 @@
                     <TextView android:id="@+id/r0t" style="@style/RecentTitle" />
                     <TextView android:id="@+id/r0s" style="@style/RecentSub" />
                 </LinearLayout>
+                <ImageView android:id="@+id/r0p" style="@style/RemapPip" />
             </LinearLayout>
             <LinearLayout android:id="@+id/r1" style="@style/RecentRow">
                 <ImageView android:id="@+id/r1i" style="@style/RecentIcon" />
@@ -79,6 +80,7 @@
                     <TextView android:id="@+id/r1t" style="@style/RecentTitle" />
                     <TextView android:id="@+id/r1s" style="@style/RecentSub" />
                 </LinearLayout>
+                <ImageView android:id="@+id/r1p" style="@style/RemapPip" />
             </LinearLayout>
             <LinearLayout android:id="@+id/r2" style="@style/RecentRow">
                 <ImageView android:id="@+id/r2i" style="@style/RecentIcon" />
@@ -87,6 +89,7 @@
                     <TextView android:id="@+id/r2t" style="@style/RecentTitle" />
                     <TextView android:id="@+id/r2s" style="@style/RecentSub" />
                 </LinearLayout>
+                <ImageView android:id="@+id/r2p" style="@style/RemapPip" />
             </LinearLayout>
             <LinearLayout android:id="@+id/r3" style="@style/RecentRow">
                 <ImageView android:id="@+id/r3i" style="@style/RecentIcon" />
@@ -95,6 +98,7 @@
                     <TextView android:id="@+id/r3t" style="@style/RecentTitle" />
                     <TextView android:id="@+id/r3s" style="@style/RecentSub" />
                 </LinearLayout>
+                <ImageView android:id="@+id/r3p" style="@style/RemapPip" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

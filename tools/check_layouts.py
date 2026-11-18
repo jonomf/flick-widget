@@ -61,7 +61,7 @@ def main():
         for c in range(cells):
             need |= {f"c{c}", f"c{c}i"} | ({f"c{c}t"} if labels else set())
         for r in range(recents):
-            need |= {f"r{r}", f"r{r}i", f"r{r}t", f"r{r}s"}
+            need |= {f"r{r}", f"r{r}i", f"r{r}t", f"r{r}s", f"r{r}p"}
         missing = need - have
         if missing:
             errors.append(f"{name} ({layout}): missing {sorted(missing)}")

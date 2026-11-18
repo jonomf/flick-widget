@@ -107,6 +107,17 @@
         <item name="android:textSize">13sp</item>
     </style>
 
+    <!-- Small round button at the end of a recent row: remap that app. -->
+    <style name="RemapPip">
+        <item name="android:layout_width">26dp</item>
+        <item name="android:layout_height">26dp</item>
+        <item name="android:layout_marginStart">4dp</item>
+        <item name="android:padding">3dp</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:src">@drawable/ic_hub</item>
+        <item name="android:contentDescription">Remap</item>
+    </style>
+
     <style name="RecentSub">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>

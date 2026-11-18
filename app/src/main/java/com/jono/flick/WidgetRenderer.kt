@@ -60,6 +60,7 @@ object WidgetRenderer {
     private val REC_ICON = intArrayOf(R.id.r0i, R.id.r1i, R.id.r2i, R.id.r3i)
     private val REC_TITLE = intArrayOf(R.id.r0t, R.id.r1t, R.id.r2t, R.id.r3t)
     private val REC_SUB = intArrayOf(R.id.r0s, R.id.r1s, R.id.r2s, R.id.r3s)
+    private val REC_PIP = intArrayOf(R.id.r0p, R.id.r1p, R.id.r2p, R.id.r3p)
 
     private const val ICON_PX = 96
 
@@ -136,6 +137,8 @@ object WidgetRenderer {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 ),
             )
+            // Pip: remap this app, by tapping (or flicking to) its new spot on the ring.
+            rv.setOnClickPendingIntent(REC_PIP[r], mutable(ctx, 400 + r, FlickActivity.assignIntent(ctx, item.pkg, item.label)))
         }
 
         // Update symbol when the Widget Updater reports a newer build. Tap: update.
