@@ -13,7 +13,10 @@ import android.view.View
 import android.widget.RemoteViews
 
 class FlickWidget : AppWidgetProvider() {
-    override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) = WidgetRenderer.renderAll(ctx)
+    override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+        ClaudeLink.syncShortcut(ctx)
+        WidgetRenderer.renderAll(ctx)
+    }
 
     override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, opts: Bundle) =
         WidgetRenderer.renderAll(ctx)
