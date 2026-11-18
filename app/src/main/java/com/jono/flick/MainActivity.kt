@@ -252,6 +252,17 @@ class MainActivity : Activity() {
             opt("Open folder") { editPath = editPath + i; drawGrid() }
             opt("Rename folder") { renameFolder(s) }
         }
+        if (s is Slot.Contact) {
+            opt("Change picture…") {
+                PickContactActivity.pickPhoto(this) { photo ->
+                    if (photo != null) {
+                        f.slots[i] = Slot.Contact(s.name, s.number, s.action, photo)
+                        Icons.clear()
+                        save()
+                    }
+                }
+            }
+        }
         opt("Choose app, person or folder…") {
             pickApp(
                 onFolder = {

@@ -24,14 +24,25 @@ class PickContactActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) {
-            val pick = Intent(Intent.ACTION_PICK).setType(Phone.CONTENT_TYPE)
-            runCatching { startActivityForResult(pick, REQ_PICK) }.onFailure { done(null) }
+            if (intent.getBooleanExtra(EXTRA_PHOTO_ONLY, false)) {
+                choosePicture()
+            } else {
+                val pick = Intent(Intent.ACTION_PICK).setType(Phone.CONTENT_TYPE)
+                runCatching { startActivityForResult(pick, REQ_PICK) }.onFailure { done(null) }
+            }
         }
     }
 
     @Deprecated("Activity result API without androidx")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_IMAGE) {
+            val img = data?.data
+            val saved = if (resultCode == RESULT_OK && img != null) savePhoto(img) else null
+            val c = picked
+            if (photoOnly) return photoDone(saved)
+            return done(if (c != null && saved != null) Slot.Contact(c.name, c.number, c.action, saved) else c)
+        }
         val uri = data?.data
         if (requestCode != REQ_PICK || resultCode != RESULT_OK || uri == null) return done(null)
         var name = ""
@@ -59,7 +70,7 @@ class PickContactActivity : Activity() {
             .setTitle(name)
             .setItems(actions.map { "${Actions.actionVerb(it)} $name" }.toTypedArray()) { _, which ->
                 val c = Slot.Contact(name, number, actions[which], photo)
-                if (c.action == Slot.Contact.CALL && !Actions.canCallDirectly(this)) askCallPermission(c) else done(c)
+                if (c.action == Slot.Contact.CALL && !Actions.canCallDirectly(this)) askCallPermission(c) else finishPerson(c)
             }
             .setOnCancelListener { done(null) }
             .show()
@@ -78,24 +89,73 @@ class PickContactActivity : Activity() {
                 picked = c
                 requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), REQ_CALL)
             }
-            .setNegativeButton("Use the dialer") { _, _ -> done(c) }
-            .setOnCancelListener { done(c) }
+            .setNegativeButton("Use the dialer") { _, _ -> finishPerson(c) }
+            .setOnCancelListener { finishPerson(c) }
             .show()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_CALL) done(picked)
+        if (requestCode == REQ_CALL) picked?.let { finishPerson(it) } ?: done(null)
+    }
+
+    /** Last step: no photo from the contact → offer to pick one (or use their initials). */
+    private fun finishPerson(c: Slot.Contact) {
+        if (c.photo != null) return done(c)
+        picked = c
+        AlertDialog.Builder(this)
+            .setTitle("Picture for ${c.name}")
+            .setMessage("Their contact photo isn't available to Flick. Pick a picture, or use their initials.")
+            .setPositiveButton("Choose picture") { _, _ -> openImagePicker() }
+            .setNegativeButton("Use initials") { _, _ -> done(c) }
+            .setOnCancelListener { done(c) }
+            .show()
+    }
+
+    private val photoOnly get() = intent.getBooleanExtra(EXTRA_PHOTO_ONLY, false)
+
+    private fun choosePicture() = openImagePicker()
+
+    /** Android's photo picker (no permission needed); the older file picker if it's missing. */
+    private fun openImagePicker() {
+        val picker = Intent(android.provider.MediaStore.ACTION_PICK_IMAGES).setType("image/*")
+        val fallback = Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+        runCatching { startActivityForResult(picker, REQ_IMAGE) }.recoverCatching { startActivityForResult(fallback, REQ_IMAGE) }
+            .onFailure { if (photoOnly) photoDone(null) else done(picked) }
+    }
+
+    private fun photoDone(name: String?) {
+        val cb = pendingPhoto
+        pendingPhoto = null
+        cb?.invoke(name)
+        finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
     }
 
     /** Copies the contact's thumbnail into Flick's files (if Android lets us read it). */
     private fun savePhoto(uri: Uri): String? = runCatching {
-        val bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return null
+        val raw = contentResolver.openInputStream(uri)?.use { decodeSmall(it, uri) } ?: return null
+        // Centre square, 256 px: enough for every size it's drawn at.
+        val side = minOf(raw.width, raw.height)
+        val sq = Bitmap.createBitmap(raw, (raw.width - side) / 2, (raw.height - side) / 2, side, side)
+        val bmp = Bitmap.createScaledBitmap(sq, 256, 256, true)
         val dir = File(filesDir, "people").apply { mkdirs() }
         val name = UUID.randomUUID().toString() + ".png"
         File(dir, name).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         name
     }.getOrNull()
+
+    /** Decodes at a reduced size (camera photos are huge). */
+    private fun decodeSmall(first: java.io.InputStream, uri: Uri): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeStream(first, null, bounds)
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 256) sample *= 2
+        return contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        }
+    }
 
     private fun done(c: Slot.Contact?) {
         val cb = pending
@@ -109,6 +169,17 @@ class PickContactActivity : Activity() {
     companion object {
         private const val REQ_PICK = 1
         private const val REQ_CALL = 2
+        private const val REQ_IMAGE = 3
+        private const val EXTRA_PHOTO_ONLY = "photo_only"
+        private var pendingPhoto: ((String?) -> Unit)? = null
+
+        /** Picks a picture (for an existing person); [onDone] gets the saved file name, or null. */
+        fun pickPhoto(ctx: Context, onDone: (String?) -> Unit) {
+            pendingPhoto = onDone
+            val i = Intent(ctx, PickContactActivity::class.java).putExtra(EXTRA_PHOTO_ONLY, true)
+            if (ctx !is Activity) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(i)
+        }
         private var pending: ((Slot.Contact?) -> Unit)? = null
 
         /** Picks a person and action, then calls [onDone] with it (null if cancelled). */

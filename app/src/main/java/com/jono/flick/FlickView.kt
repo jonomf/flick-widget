@@ -677,13 +677,26 @@ class FlickView(
         }
     }
 
-    private fun drawRing(c: Canvas, f: Slot.Folder, o: Recognizer.Pt, hover: Int, nested: Boolean, skip: Int = -1) {
-        // Hub: folder name, "‹" when tapping it goes back up.
+    private val hubIcon = context.getDrawable(R.drawable.ic_hub)
+
+    private fun drawHubLabel(c: Canvas, f: Slot.Folder, o: Recognizer.Pt, nested: Boolean) {
         fill.color = surface
         c.drawCircle(o.x, o.y, hubR, fill)
         val hubLabel = if (nested && (mode == Mode.RING || mode == Mode.DRAG)) "‹ ${f.name}" else f.name
         val t = TextUtils.ellipsize(hubLabel, text, hubR * 2.6f, TextUtils.TruncateAt.END).toString()
         c.drawText(t, o.x, o.y + text.textSize / 3, text)
+    }
+
+    private fun drawRing(c: Canvas, f: Slot.Folder, o: Recognizer.Pt, hover: Int, nested: Boolean, skip: Int = -1) {
+        // Hub: the Flick symbol at the top level; inside a folder, its name ("‹" = tap to go up).
+        if (f === root) {
+            hubIcon?.let {
+                it.setBounds((o.x - hubR).toInt(), (o.y - hubR).toInt(), (o.x + hubR).toInt(), (o.y + hubR).toInt())
+                it.draw(c)
+            }
+        } else {
+            drawHubLabel(c, f, o, nested)
+        }
 
         for (i in 0 until Slot.SLOTS) {
             val a = Math.toRadians(i * 45.0)
