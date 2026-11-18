@@ -252,6 +252,11 @@ class MainActivity : Activity() {
             opt("Open folder") { editPath = editPath + i; drawGrid() }
             opt("Rename folder") { renameFolder(s) }
         }
+        if (s is Slot.Link) {
+            opt("Edit link or picture…") {
+                Dialogs.link(this, s.url, s.name, s.photo) { l -> f.slots[i] = l; Icons.clear(); save() }
+            }
+        }
         if (s is Slot.Contact) {
             opt("Change picture…") {
                 PickContactActivity.pickPhoto(this) { photo ->
@@ -263,7 +268,7 @@ class MainActivity : Activity() {
                 }
             }
         }
-        opt("Choose app, person or folder…") {
+        opt("Choose app, person, link or folder…") {
             pickApp(
                 onFolder = {
                     Dialogs.folderName(this, "Folder") { name ->
@@ -274,6 +279,7 @@ class MainActivity : Activity() {
                 onPerson = {
                     PickContactActivity.start(this) { p -> if (p != null) { f.slots[i] = p; save() } }
                 },
+                onLink = { Dialogs.link(this) { l -> f.slots[i] = l; save() } },
             ) { app -> f.slots[i] = app; save() }
         }
         if (s !is Slot.Folder) {
@@ -320,11 +326,15 @@ class MainActivity : Activity() {
     }
 
     /** Same picker as everywhere: last 3 apps, then all apps A–Z. */
-    private fun pickApp(onFolder: (() -> Unit)? = null, onPerson: (() -> Unit)? = null, onPick: (Slot.App) -> Unit) {
+    private fun pickApp(
+        onFolder: (() -> Unit)? = null, onPerson: (() -> Unit)? = null, onLink: (() -> Unit)? = null,
+        onPick: (Slot.App) -> Unit,
+    ) {
         lateinit var dialog: AlertDialog
         val newFolder: ((View) -> Unit)? = onFolder?.let { f -> { _: View -> dialog.dismiss(); f() } }
         val newPerson: ((View) -> Unit)? = onPerson?.let { f -> { _: View -> dialog.dismiss(); f() } }
-        val picker = AppPicker(this, newFolder, newPerson) { app, _ ->
+        val newLink: ((View) -> Unit)? = onLink?.let { f -> { _: View -> dialog.dismiss(); f() } }
+        val picker = AppPicker(this, newFolder, newPerson, newLink) { app, _ ->
             onPick(app)
             dialog.dismiss()
         }.apply {

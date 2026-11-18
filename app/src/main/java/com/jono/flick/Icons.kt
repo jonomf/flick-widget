@@ -36,10 +36,19 @@ object Icons {
     }
 
     /** A person: their photo in a circle (or their initials), with the calling/texting app's icon on it. */
-    private fun drawContact(ctx: Context, c: Canvas, p: Slot.Contact, x: Float, y: Float, size: Float, badge: Boolean) {
+    private fun drawContact(ctx: Context, c: Canvas, p: Slot.Contact, x: Float, y: Float, size: Float, badge: Boolean) =
+        drawPictured(ctx, c, p.name, p.photo, if (badge) Actions.actionPackage(ctx, p.action) else null, x, y, size)
+
+    private fun drawLink(ctx: Context, c: Canvas, l: Slot.Link, x: Float, y: Float, size: Float, badge: Boolean) =
+        drawPictured(ctx, c, l.name, l.photo, if (badge) Actions.linkPackage(ctx, l.url) else null, x, y, size)
+
+    /** A picture in a circle (or initials), with the app that opens it as a small badge. */
+    private fun drawPictured(
+        ctx: Context, c: Canvas, name: String, photoName: String?, badgePkg: String?, x: Float, y: Float, size: Float,
+    ) {
         val cx = x + size / 2
         val cy = y + size / 2
-        val bmp = p.photo?.let { photo(ctx, it) }
+        val bmp = photoName?.let { photo(ctx, it) }
         if (bmp != null) {
             val shader = BitmapShader(bmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
             val scale = size / minOf(bmp.width, bmp.height)
@@ -50,7 +59,7 @@ object Icons {
             c.drawCircle(cx, cy, size / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = shader })
         } else {
             c.drawCircle(cx, cy, size / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ctx.getColor(R.color.btn_bg) })
-            val initials = p.name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1).uppercase() }
+            val initials = name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1).uppercase() }
             val t = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = ctx.getColor(R.color.btn_text)
                 textAlign = Paint.Align.CENTER
@@ -59,8 +68,7 @@ object Icons {
             }
             c.drawText(initials.ifEmpty { "?" }, cx, cy + t.textSize / 3, t)
         }
-        if (!badge) return
-        val pkg = Actions.actionPackage(ctx, p.action) ?: return
+        val pkg = badgePkg ?: return
         val b = size * 0.42f
         val bx = x + size - b
         val by = y + size - b
@@ -89,6 +97,7 @@ object Icons {
                 c.drawCircle(x + size / 2, y + size / 2, size / 2, p)
             }
             is Slot.Contact -> drawContact(ctx, c, slot, x, y, size, badge = true)
+            is Slot.Link -> drawLink(ctx, c, slot, x, y, size, badge = true)
             is Slot.Folder -> {
                 // A tiny radial menu: each item in its compass spot around a centre dot,
                 // empty spots as faint dots, sub-folders as small discs.
@@ -115,6 +124,7 @@ object Icons {
                             c.drawCircle(ix, iy, mini * 0.42f, ink)
                         }
                         is Slot.Contact -> drawContact(ctx, c, s, ix - mini / 2, iy - mini / 2, mini, badge = false)
+                        is Slot.Link -> drawLink(ctx, c, s, ix - mini / 2, iy - mini / 2, mini, badge = false)
                         null -> {} // empty spots aren't shown in the preview
                     }
                 }

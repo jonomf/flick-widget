@@ -29,6 +29,12 @@
             <action android:name="android.intent.action.SENDTO" />
             <data android:scheme="smsto" />
         </intent>
+        <!-- Links: which app opens each one (for its icon). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
         <!-- The Widget Updater, which checks for new builds and installs them. -->
@@ -60,6 +66,21 @@
             android:name=".MapActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+
+        <!-- Share a link (Chat space, Discord channel, page…) to Flick to put it on the menu. -->
+        <activity
+            android:name=".ShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="Add to Flick"
+            android:taskAffinity=""
+            android:theme="@style/Overlay">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
 
         <!-- Adding a person: the system contact picker, then Call / Text / WhatsApp. -->
         <activity

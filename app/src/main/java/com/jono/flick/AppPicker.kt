@@ -27,6 +27,8 @@ class AppPicker(
     private val onNewFolder: ((View) -> Unit)? = null,
     /** When set, a "Person" tile (call / text someone) follows; tapping it calls this. */
     private val onNewPerson: ((View) -> Unit)? = null,
+    /** When set, a "Link" tile (a chat group, channel or page) follows; tapping it calls this. */
+    private val onNewLink: ((View) -> Unit)? = null,
     private val onPick: (Slot.App, View) -> Unit,
 ) : LinearLayout(ctx) {
     private val d = resources.displayMetrics.density
@@ -112,6 +114,14 @@ class AppPicker(
             cell.setOnClickListener { make(cell) }
             recentRow.addView(cell, LayoutParams(0, -2, 1f))
         }
+        onNewLink?.let { make ->
+            val cell = makeCell(context)
+            (cell.getChildAt(0) as ImageView).setImageResource(R.drawable.ic_link_add)
+            (cell.getChildAt(1) as TextView).text = "Link"
+            (cell.getChildAt(2) as TextView).text = "group · channel"
+            cell.setOnClickListener { make(cell) }
+            recentRow.addView(cell, LayoutParams(0, -2, 1f))
+        }
         recent.forEach { app ->
             val cell = makeCell(context)
             bindCell(cell, app)
@@ -130,7 +140,7 @@ class AppPicker(
     fun itemAt(x: Float, y: Float): Pair<Slot, View>? {
         val r = Rect()
         val folderTile = if (onNewFolder != null) 1 else 0
-        val first = folderTile + if (onNewPerson != null) 1 else 0
+        val first = folderTile + (if (onNewPerson != null) 1 else 0) + (if (onNewLink != null) 1 else 0)
         for (i in 0 until recentRow.childCount) {
             val c = recentRow.getChildAt(i)
             if (i >= first + recent.size) break
@@ -139,7 +149,7 @@ class AppPicker(
             if (r.contains(x.toInt(), y.toInt())) {
                 return when {
                     i < folderTile -> Slot.Folder("Folder") to c
-                    i < first -> null // the person tile needs the contact picker first; tap it
+                    i < first -> null // person/link tiles need their pickers first; tap them
                     else -> recent[i - first] to c
                 }
             }

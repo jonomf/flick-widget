@@ -22,6 +22,7 @@ object Actions {
         val intent = when (item) {
             is Slot.App -> ctx.packageManager.getLaunchIntentForPackage(item.pkg)
             is Slot.Contact -> contactIntent(ctx, item)
+            is Slot.Link -> linkIntent(item.url)
             is Slot.Folder -> null
         }
         if (intent == null) {
@@ -34,6 +35,24 @@ object Actions {
             if (!it) Toast.makeText(ctx, "Couldn't open that", Toast.LENGTH_SHORT).show()
         }
     }
+
+    /** Opens in the app that claims the link (Chat, Discord, …), else the browser. */
+    fun linkIntent(url: String): Intent? = runCatching {
+        val u = url.trim().let { if (it.contains("://")) it else "https://$it" }
+        Intent(Intent.ACTION_VIEW, Uri.parse(u)).addCategory(Intent.CATEGORY_BROWSABLE)
+    }.getOrNull()
+
+    /** The app a link opens in (its icon goes on the link's picture); null for a plain browser. */
+    fun linkPackage(ctx: Context, url: String): String? {
+        val i = linkIntent(url) ?: return null
+        val r = ctx.packageManager.resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY) ?: return null
+        val pkg = r.activityInfo?.packageName ?: return null
+        return if (pkg == "android") browserPackage(ctx) else pkg // "android" = the chooser
+    }
+
+    private fun browserPackage(ctx: Context): String? =
+        ctx.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")), 0)
+            ?.activityInfo?.packageName?.takeIf { it != "android" }
 
     fun canCallDirectly(ctx: Context): Boolean =
         ctx.checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED

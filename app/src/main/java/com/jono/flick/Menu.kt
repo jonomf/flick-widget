@@ -24,6 +24,14 @@ sealed class Slot {
         }
     }
 
+    /**
+     * A link opened in whichever app handles it: a Google Chat space or group, a Discord channel,
+     * a Telegram or Slack chat, a web page. [photo] as for people.
+     */
+    class Link(val name: String, val url: String, val photo: String? = null) : Slot() {
+        override val label: String get() = name
+    }
+
     class Folder(var name: String, val slots: MutableList<Slot?> = MutableList(SLOTS) { null }) : Slot() {
         override val label: String get() = name
     }
@@ -60,7 +68,7 @@ fun Slot.Folder.appPaths(): Map<String, List<List<Int>>> {
             when (s) {
                 is Slot.App -> out.getOrPut(s.pkg) { mutableListOf() } += base + i
                 is Slot.Folder -> walk(s, base + i)
-                is Slot.Contact, null -> {}
+                is Slot.Contact, is Slot.Link, null -> {}
             }
         }
     }

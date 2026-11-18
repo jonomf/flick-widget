@@ -38,13 +38,14 @@ class FlickActivity : Activity(), FlickView.Listener {
         start(intent)
     }
 
-    /** Set when a widget's remap pip opened us: the tapped spot gets this app. */
-    private var assignApp: Slot.App? = null
+    /** Set when the remap pip (or sharing a link to Flick) opened us: the chosen spot gets this. */
+    private var assignApp: Slot? = null
     private lateinit var root: FrameLayout
     private var panelView: View? = null
 
     private fun start(i: Intent) {
-        assignApp = i.getStringExtra(EXTRA_ASSIGN_PKG)?.let { Slot.App(it, i.getStringExtra(EXTRA_ASSIGN_LABEL) ?: it) }
+        assignApp = i.getStringExtra(EXTRA_ASSIGN_SLOT)?.let { Store.slotFromJson(it) }
+            ?: i.getStringExtra(EXTRA_ASSIGN_PKG)?.let { Slot.App(it, i.getStringExtra(EXTRA_ASSIGN_LABEL) ?: it) }
         view = FlickView(this, Store.menu(this), this, assign = assignApp != null).apply { carry = assignApp }
         root = FrameLayout(this).apply { addView(view, FrameLayout.LayoutParams(-1, -1)) }
         setContentView(root)
@@ -91,8 +92,8 @@ class FlickActivity : Activity(), FlickView.Listener {
             Store.saveMenu(this, menu)
             WidgetRenderer.renderAll(this)
             val where = menu.describe(path)
-            val msg = if (old is Slot.App && old.pkg != app.pkg) "${app.label} → $where (was ${old.label})"
-            else "${app.label} → $where"
+            val replaced = old is Slot.App && (app !is Slot.App || old.pkg != app.pkg)
+            val msg = "${app.label} → $where" + if (replaced) " (was ${old?.label})" else ""
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
         onClose()
@@ -159,7 +160,22 @@ class FlickActivity : Activity(), FlickView.Listener {
                 onClose()
             }
         }
-        val picker = AppPicker(this, newFolder, newPerson) { app, _ ->
+        val newLink = { _: View ->
+            picking = true // its picture picker may cover us
+            Dialogs.link(this, onCancel = { picking = false }) { l ->
+                picking = false
+                val fresh = Store.menu(this)
+                val folder = fresh.at(path.dropLast(1))
+                if (folder != null && folder.slots[path.last()] == null) {
+                    folder.slots[path.last()] = l
+                    Store.saveMenu(this, fresh)
+                    WidgetRenderer.renderAll(this)
+                    Toast.makeText(this, "${l.name} → $where", Toast.LENGTH_SHORT).show()
+                }
+                onClose()
+            }
+        }
+        val picker = AppPicker(this, newFolder, newPerson, newLink) { app, _ ->
             val fresh = Store.menu(this)
             val folder = fresh.at(path.dropLast(1))
             if (folder != null && folder.slots[path.last()] == null) {
@@ -227,6 +243,11 @@ class FlickActivity : Activity(), FlickView.Listener {
             intent(ctx).putExtra(EXTRA_EMPTY, path.toIntArray())
         private const val EXTRA_ASSIGN_PKG = "assign_pkg"
         private const val EXTRA_ASSIGN_LABEL = "assign_label"
+        private const val EXTRA_ASSIGN_SLOT = "assign_slot"
+
+        /** Opens the top ring to choose where [slot] goes (e.g. a link shared to Flick). */
+        fun assignSlotIntent(ctx: Context, slot: Slot): Intent =
+            intent(ctx).putExtra(EXTRA_ASSIGN_SLOT, Store.slotToJson(slot))
 
         /** Opens the top ring to choose where [pkg] goes (the widget's remap pip). */
         fun assignIntent(ctx: Context, pkg: String, label: String): Intent =

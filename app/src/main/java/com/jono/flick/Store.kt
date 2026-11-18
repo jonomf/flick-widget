@@ -28,6 +28,8 @@ object Store {
 
     private fun toJson(s: Slot): JSONObject = when (s) {
         is Slot.App -> JSONObject().put("app", s.pkg).put("label", s.label)
+        is Slot.Link -> JSONObject().put("link", s.name).put("url", s.url)
+            .apply { if (s.photo != null) put("photo", s.photo) }
         is Slot.Contact -> JSONObject().put("contact", s.name).put("number", s.number).put("action", s.action)
             .apply { if (s.photo != null) put("photo", s.photo) }
         is Slot.Folder -> JSONObject().put("folder", s.name).put("slots", JSONArray().apply {
@@ -38,6 +40,7 @@ object Store {
     private fun slotFrom(o: JSONObject): Slot? = when {
         o.has("app") -> Slot.App(o.getString("app"), o.optString("label", o.getString("app")))
         o.has("folder") -> folderFrom(o)
+        o.has("link") -> Slot.Link(o.getString("link"), o.getString("url"), o.optString("photo").ifEmpty { null })
         o.has("contact") -> Slot.Contact(
             o.getString("contact"), o.getString("number"), o.optString("action", Slot.Contact.CALL),
             o.optString("photo").ifEmpty { null },
