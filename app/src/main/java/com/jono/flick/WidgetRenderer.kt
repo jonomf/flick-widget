@@ -161,6 +161,10 @@ object WidgetRenderer {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
                 is Slot.Folder -> mutable(ctx, 200 + i, FlickActivity.intent(ctx, listOf(i)))
+                is Slot.Contact -> PendingIntent.getActivity(
+                    ctx, 700 + i, LaunchActivity.slotIntent(ctx, s),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
             }
             rv.setOnClickPendingIntent(CELL[c], pi)
         }

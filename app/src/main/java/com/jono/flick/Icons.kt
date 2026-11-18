@@ -2,6 +2,10 @@ package com.jono.flick
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
+import android.graphics.Matrix
+import android.graphics.Shader
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.drawable.Drawable
@@ -13,7 +17,52 @@ object Icons {
     fun appDrawable(ctx: Context, pkg: String): Drawable? =
         drawables.getOrPut(pkg) { runCatching { ctx.packageManager.getApplicationIcon(pkg) }.getOrNull() }
 
-    fun clear() = drawables.clear()
+    private val photos = HashMap<String, Bitmap?>()
+
+    fun clear() {
+        drawables.clear()
+        photos.clear()
+    }
+
+    private fun photo(ctx: Context, name: String): Bitmap? = photos.getOrPut(name) {
+        runCatching { BitmapFactory.decodeFile(PickContactActivity.photoFile(ctx, name).path) }.getOrNull()
+    }
+
+    /** A person: their photo in a circle (or their initials), with the calling/texting app's icon on it. */
+    private fun drawContact(ctx: Context, c: Canvas, p: Slot.Contact, x: Float, y: Float, size: Float, badge: Boolean) {
+        val cx = x + size / 2
+        val cy = y + size / 2
+        val bmp = p.photo?.let { photo(ctx, it) }
+        if (bmp != null) {
+            val shader = BitmapShader(bmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            val scale = size / minOf(bmp.width, bmp.height)
+            shader.setLocalMatrix(Matrix().apply {
+                setScale(scale, scale)
+                postTranslate(cx - bmp.width * scale / 2, cy - bmp.height * scale / 2)
+            })
+            c.drawCircle(cx, cy, size / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = shader })
+        } else {
+            c.drawCircle(cx, cy, size / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ctx.getColor(R.color.btn_bg) })
+            val initials = p.name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1).uppercase() }
+            val t = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = ctx.getColor(R.color.btn_text)
+                textAlign = Paint.Align.CENTER
+                textSize = size * (if (initials.length > 1) 0.38f else 0.46f)
+                isFakeBoldText = true
+            }
+            c.drawText(initials.ifEmpty { "?" }, cx, cy + t.textSize / 3, t)
+        }
+        if (!badge) return
+        val pkg = Actions.actionPackage(ctx, p.action) ?: return
+        val b = size * 0.42f
+        val bx = x + size - b
+        val by = y + size - b
+        c.drawCircle(bx + b / 2, by + b / 2, b / 2 + size * 0.03f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ctx.getColor(R.color.widget_bg) })
+        appDrawable(ctx, pkg)?.let {
+            it.setBounds(bx.toInt(), by.toInt(), (bx + b).toInt(), (by + b).toInt())
+            it.draw(c)
+        }
+    }
 
     /** Square bitmap of [px] for a slot. Folders: a tinted disc with up to 4 of their items inside. */
     fun bitmap(ctx: Context, slot: Slot, px: Int): Bitmap {
@@ -32,6 +81,7 @@ object Icons {
                 val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ctx.getColor(R.color.btn_bg) }
                 c.drawCircle(x + size / 2, y + size / 2, size / 2, p)
             }
+            is Slot.Contact -> drawContact(ctx, c, slot, x, y, size, badge = true)
             is Slot.Folder -> {
                 // A tiny radial menu: each item in its compass spot around a centre dot,
                 // empty spots as faint dots, sub-folders as small discs.
@@ -57,10 +107,8 @@ object Icons {
                             ink.alpha = 150
                             c.drawCircle(ix, iy, mini * 0.42f, ink)
                         }
-                        null -> {
-                            ink.alpha = 70
-                            c.drawCircle(ix, iy, size * 0.025f, ink)
-                        }
+                        is Slot.Contact -> drawContact(ctx, c, s, ix - mini / 2, iy - mini / 2, mini, badge = false)
+                        null -> {} // empty spots aren't shown in the preview
                     }
                 }
             }

@@ -69,7 +69,11 @@ class MapActivity : Activity(), FlickView.Listener {
         statusRow.addView(undo)
         col.addView(statusRow)
 
-        picker = AppPicker(this, { cell -> tapPlace(Slot.Folder("Folder"), cell) }) { app, cell -> tapPlace(app, cell) }
+        picker = AppPicker(
+            this,
+            onNewFolder = { cell -> tapPlace(Slot.Folder("Folder"), cell) },
+            onNewPerson = { cell -> PickContactActivity.start(this) { p -> if (p != null) tapPlace(p, cell) } },
+        ) { app, cell -> tapPlace(app, cell) }
             .apply { menu = this@MapActivity.menu }
         col.addView(picker, LinearLayout.LayoutParams(-1, 0, 1f))
 

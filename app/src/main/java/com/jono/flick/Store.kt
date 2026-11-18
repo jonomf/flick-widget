@@ -23,8 +23,13 @@ object Store {
         prefs(ctx).edit().putString("menu", toJson(root).toString()).apply()
     }
 
+    fun slotToJson(s: Slot): String = toJson(s).toString()
+    fun slotFromJson(json: String): Slot? = runCatching { slotFrom(JSONObject(json)) }.getOrNull()
+
     private fun toJson(s: Slot): JSONObject = when (s) {
         is Slot.App -> JSONObject().put("app", s.pkg).put("label", s.label)
+        is Slot.Contact -> JSONObject().put("contact", s.name).put("number", s.number).put("action", s.action)
+            .apply { if (s.photo != null) put("photo", s.photo) }
         is Slot.Folder -> JSONObject().put("folder", s.name).put("slots", JSONArray().apply {
             s.slots.forEach { put(if (it == null) JSONObject.NULL else toJson(it)) }
         })
@@ -33,6 +38,10 @@ object Store {
     private fun slotFrom(o: JSONObject): Slot? = when {
         o.has("app") -> Slot.App(o.getString("app"), o.optString("label", o.getString("app")))
         o.has("folder") -> folderFrom(o)
+        o.has("contact") -> Slot.Contact(
+            o.getString("contact"), o.getString("number"), o.optString("action", Slot.Contact.CALL),
+            o.optString("photo").ifEmpty { null },
+        )
         else -> null
     }
 

@@ -10,6 +10,20 @@ sealed class Slot {
 
     class App(val pkg: String, override val label: String) : Slot()
 
+    /**
+     * A person and what to do: call, text (SMS) or WhatsApp. Like the system's per-person
+     * "Direct dial" / chat shortcuts. [photo] is a file name in the app's files, if any.
+     */
+    class Contact(val name: String, val number: String, val action: String, val photo: String? = null) : Slot() {
+        override val label: String get() = name
+
+        companion object {
+            const val CALL = "call"
+            const val SMS = "sms"
+            const val WHATSAPP = "whatsapp"
+        }
+    }
+
     class Folder(var name: String, val slots: MutableList<Slot?> = MutableList(SLOTS) { null }) : Slot() {
         override val label: String get() = name
     }
@@ -46,7 +60,7 @@ fun Slot.Folder.appPaths(): Map<String, List<List<Int>>> {
             when (s) {
                 is Slot.App -> out.getOrPut(s.pkg) { mutableListOf() } += base + i
                 is Slot.Folder -> walk(s, base + i)
-                null -> {}
+                is Slot.Contact, null -> {}
             }
         }
     }

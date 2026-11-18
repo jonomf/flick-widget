@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private val Recognizer.Result.Launch.pkg: String get() = (app as Slot.App).pkg
+
 class RecognizerTest {
     private val g = Recognizer.Geometry(minStroke = 40f, minAfterTurn = 24f, still = 8f, dwellMs = 300)
 
@@ -58,7 +60,7 @@ class RecognizerTest {
         val r = Recognizer(menu(), g)
         val res = stroke(r, 0f to 0f, 0f to -100f)
         assertTrue(res is Recognizer.Result.Launch)
-        assertEquals("p.a", (res as Recognizer.Result.Launch).app.pkg)
+        assertEquals("p.a", (res as Recognizer.Result.Launch).pkg)
         assertEquals(false, r.shown)
     }
 
@@ -68,7 +70,7 @@ class RecognizerTest {
         val res = stroke(r, 0f to 0f, 100f to 0f, 100f to -100f, 0f to -100f)
         assertTrue("got $res", res is Recognizer.Result.Launch)
         res as Recognizer.Result.Launch
-        assertEquals("p.deep", res.app.pkg)
+        assertEquals("p.deep", res.pkg)
         assertEquals(listOf(2, 0, 6), res.path)
         assertEquals(listOf("More", "Deeper", "deep"), res.names)
     }
@@ -77,20 +79,20 @@ class RecognizerTest {
         val r = Recognizer(menu(), g)
         // E into More, then a right-angle turn S picks "b".
         val res = stroke(r, 0f to 0f, 90f to 0f, 90f to 90f)
-        assertEquals("p.b", (res as Recognizer.Result.Launch).app.pkg)
+        assertEquals("p.b", (res as Recognizer.Result.Launch).pkg)
     }
 
     @Test fun fullReversal() {
         val r = Recognizer(menu(), g)
         // E into More, then straight back W picks "c".
         val res = stroke(r, 0f to 0f, 100f to 0f, 0f to 0f)
-        assertEquals("p.c", (res as Recognizer.Result.Launch).app.pkg)
+        assertEquals("p.c", (res as Recognizer.Result.Launch).pkg)
     }
 
     @Test fun smallHookAtTheEndIsIgnored() {
         val r = Recognizer(menu(), g)
         val res = stroke(r, 0f to 0f, 0f to -100f, 10f to -95f)
-        assertEquals("p.a", (res as Recognizer.Result.Launch).app.pkg)
+        assertEquals("p.a", (res as Recognizer.Result.Launch).pkg)
     }
 
     @Test fun tapIsATap() {
@@ -111,7 +113,7 @@ class RecognizerTest {
         r.move(-5f, -80f, 450)
         assertEquals(0, r.hover)
         val res = r.up(-5f, -80f, 460)
-        assertEquals("p.a", (res as Recognizer.Result.Launch).app.pkg)
+        assertEquals("p.a", (res as Recognizer.Result.Launch).pkg)
     }
 
     @Test fun holdOnFolderOpensIt() {
@@ -124,7 +126,7 @@ class RecognizerTest {
         assertEquals(true, r.shown)
         r.move(100f, 80f, 500)
         val res = r.up(100f, 80f, 510)
-        assertEquals("p.b", (res as Recognizer.Result.Launch).app.pkg)
+        assertEquals("p.b", (res as Recognizer.Result.Launch).pkg)
     }
 
     @Test fun flickIntoFolderAndLiftKeepsDirection() {
@@ -136,7 +138,7 @@ class RecognizerTest {
         val r2 = Recognizer(menu(), g)
         val res2 = stroke(r2, 0f to 0f, 70f to -70f)
         res2 as Recognizer.Result.Launch
-        assertEquals("p.z", res2.app.pkg)
+        assertEquals("p.z", res2.pkg)
         assertEquals(listOf(1, 1, 1), res2.path)
         assertEquals(listOf("X", "Y", "z"), res2.names)
         // Zigzag E into More, then N into Deeper and lift: Deeper's N is empty.
@@ -164,10 +166,17 @@ class RecognizerTest {
         assertEquals(listOf(2, 7), (res2 as Recognizer.Result.Spot).path)
     }
 
+    @Test fun contactIsLaunchedLikeAnApp() {
+        val m = menu()
+        m.slots[4] = Slot.Contact("Sam", "+14155550100", Slot.Contact.CALL)
+        val res = stroke(Recognizer(m, g), 0f to 0f, 0f to 100f)
+        assertEquals("Sam", ((res as Recognizer.Result.Launch).app as Slot.Contact).name)
+    }
+
     @Test fun tapOnShownRingItem() {
         val r = Recognizer(menu(), g, startShown = true)
         r.down(0f, -90f, 0, origin = Recognizer.Pt(0f, 0f))
         val res = r.up(0f, -90f, 60)
-        assertEquals("p.a", (res as Recognizer.Result.Launch).app.pkg)
+        assertEquals("p.a", (res as Recognizer.Result.Launch).pkg)
     }
 }

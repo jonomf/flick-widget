@@ -40,8 +40,8 @@ class Recognizer(private val root: Slot.Folder, private val g: Geometry, startSh
     class Level(val folder: Slot.Folder, val origin: Pt, val index: Int)
 
     sealed class Result {
-        /** Open this app. [path] is the folder indexes walked to reach it, then the app's index. */
-        class Launch(val app: Slot.App, val path: List<Int>, val names: List<String>) : Result()
+        /** Open this app (or run this contact action). [path]: folder indexes, then its index. */
+        class Launch(val app: Slot, val path: List<Int>, val names: List<String>) : Result()
         /** Show this folder's ring at [at] and wait for a tap or another flick. */
         class Open(val folder: Slot.Folder, val at: Pt, val path: List<Int>) : Result()
         /** A plain tap: no movement, nothing chosen. */
@@ -160,14 +160,14 @@ class Recognizer(private val root: Slot.Folder, private val g: Geometry, startSh
                 val np = p + hover
                 when (val n = f.slots[hover]) {
                     is Slot.Folder -> { f = n; p = np }
-                    is Slot.App -> return Result.Launch(n, np, root.names(p) + n.label)
                     null -> return Result.Spot(np)
+                    else -> return Result.Launch(n, np, root.names(p) + n.label)
                 }
             }
         }
         return when {
-            s is Slot.App -> Result.Launch(s, path + hover, root.names(path) + s.label)
             s is Slot.Folder -> Result.Open(s, cur, path + hover)
+            s != null -> Result.Launch(s, path + hover, root.names(path) + s.label)
             hover >= 0 -> Result.Spot(path + hover)
             hover == -1 && levels.size == 1 && !shown && travel < g.minStroke -> Result.Tap(trail.first())
             hover == -1 && shown -> Result.Open(folder, origin, path)

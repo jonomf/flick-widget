@@ -25,6 +25,8 @@ class AppPicker(
     ctx: Context,
     /** When set, the first tile is "New folder"; tapping it calls this. */
     private val onNewFolder: ((View) -> Unit)? = null,
+    /** When set, a "Person" tile (call / text someone) follows; tapping it calls this. */
+    private val onNewPerson: ((View) -> Unit)? = null,
     private val onPick: (Slot.App, View) -> Unit,
 ) : LinearLayout(ctx) {
     private val d = resources.displayMetrics.density
@@ -102,13 +104,21 @@ class AppPicker(
             cell.setOnClickListener { make(cell) }
             recentRow.addView(cell, LayoutParams(0, -2, 1f))
         }
+        onNewPerson?.let { make ->
+            val cell = makeCell(context)
+            (cell.getChildAt(0) as ImageView).setImageResource(R.drawable.ic_person_add)
+            (cell.getChildAt(1) as TextView).text = "Person"
+            (cell.getChildAt(2) as TextView).text = "call · text"
+            cell.setOnClickListener { make(cell) }
+            recentRow.addView(cell, LayoutParams(0, -2, 1f))
+        }
         recent.forEach { app ->
             val cell = makeCell(context)
             bindCell(cell, app)
             cell.setOnClickListener { onPick(app, cell) }
             recentRow.addView(cell, LayoutParams(0, -2, 1f))
         }
-        // Keep three columns' spacing even when fewer recents.
+        // Keep the columns evenly spaced even with fewer recents.
         repeat(3 - recent.size) { recentRow.addView(View(context), LayoutParams(0, 1, 1f)) }
         adapter.refresh()
     }
@@ -119,14 +129,19 @@ class AppPicker(
      */
     fun itemAt(x: Float, y: Float): Pair<Slot, View>? {
         val r = Rect()
-        val first = if (onNewFolder != null) 1 else 0
+        val folderTile = if (onNewFolder != null) 1 else 0
+        val first = folderTile + if (onNewPerson != null) 1 else 0
         for (i in 0 until recentRow.childCount) {
             val c = recentRow.getChildAt(i)
             if (i >= first + recent.size) break
             c.getHitRect(r)
             r.offset(recentRow.left, recentRow.top)
             if (r.contains(x.toInt(), y.toInt())) {
-                return (if (i < first) Slot.Folder("Folder") else recent[i - first]) to c
+                return when {
+                    i < folderTile -> Slot.Folder("Folder") to c
+                    i < first -> null // the person tile needs the contact picker first; tap it
+                    else -> recent[i - first] to c
+                }
             }
         }
         val pos = grid.pointToPosition((x - grid.left).toInt(), (y - grid.top).toInt())

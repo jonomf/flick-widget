@@ -40,7 +40,7 @@ class FlickView(
 ) : View(context) {
 
     interface Listener {
-        fun onLaunch(app: Slot.App, route: List<String>, x: Float, y: Float) {}
+        fun onLaunch(app: Slot, route: List<String>, x: Float, y: Float) {}
         fun onClose()
         /** Assign mode: the spot chosen (folder indexes, then the slot index). */
         fun onAssign(path: List<Int>) {}

@@ -252,13 +252,18 @@ class MainActivity : Activity() {
             opt("Open folder") { editPath = editPath + i; drawGrid() }
             opt("Rename folder") { renameFolder(s) }
         }
-        opt("Choose app…") {
-            pickApp(onFolder = {
-                Dialogs.folderName(this, "Folder") { name ->
-                    f.slots[i] = Slot.Folder(name)
-                    save()
-                }
-            }) { app -> f.slots[i] = app; save() }
+        opt("Choose app, person or folder…") {
+            pickApp(
+                onFolder = {
+                    Dialogs.folderName(this, "Folder") { name ->
+                        f.slots[i] = Slot.Folder(name)
+                        save()
+                    }
+                },
+                onPerson = {
+                    PickContactActivity.start(this) { p -> if (p != null) { f.slots[i] = p; save() } }
+                },
+            ) { app -> f.slots[i] = app; save() }
         }
         if (s !is Slot.Folder) {
             opt("Make a folder here") {
@@ -304,10 +309,11 @@ class MainActivity : Activity() {
     }
 
     /** Same picker as everywhere: last 3 apps, then all apps A–Z. */
-    private fun pickApp(onFolder: (() -> Unit)? = null, onPick: (Slot.App) -> Unit) {
+    private fun pickApp(onFolder: (() -> Unit)? = null, onPerson: (() -> Unit)? = null, onPick: (Slot.App) -> Unit) {
         lateinit var dialog: AlertDialog
         val newFolder: ((View) -> Unit)? = onFolder?.let { f -> { _: View -> dialog.dismiss(); f() } }
-        val picker = AppPicker(this, newFolder) { app, _ ->
+        val newPerson: ((View) -> Unit)? = onPerson?.let { f -> { _: View -> dialog.dismiss(); f() } }
+        val picker = AppPicker(this, newFolder, newPerson) { app, _ ->
             onPick(app)
             dialog.dismiss()
         }.apply {

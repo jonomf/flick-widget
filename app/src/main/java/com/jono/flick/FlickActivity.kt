@@ -69,18 +69,12 @@ class FlickActivity : Activity(), FlickView.Listener {
         }
     }
 
-    override fun onLaunch(app: Slot.App, route: List<String>, x: Float, y: Float) {
-        val launch = packageManager.getLaunchIntentForPackage(app.pkg)
-        if (launch == null) {
-            Toast.makeText(this, "${app.label} isn't installed", Toast.LENGTH_SHORT).show()
-            onClose()
-            return
-        }
-        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    override fun onLaunch(app: Slot, route: List<String>, x: Float, y: Float) {
         val opts = ActivityOptions.makeScaleUpAnimation(view, x.toInt(), y.toInt(), 1, 1)
-        runCatching { startActivity(launch, opts.toBundle()) }
-        Store.addRecent(this, app.pkg, app.label, route.joinToString(" › "))
-        WidgetRenderer.renderAll(this)
+        if (Actions.run(this, app, opts.toBundle()) && app is Slot.App) {
+            Store.addRecent(this, app.pkg, app.label, route.joinToString(" › "))
+            WidgetRenderer.renderAll(this)
+        }
         finish()
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
@@ -148,7 +142,24 @@ class FlickActivity : Activity(), FlickView.Listener {
                 view.openRing(path, Recognizer.Pt(view.width / 2f, view.height / 2f))
             }
         }
-        val picker = AppPicker(this, newFolder) { app, _ ->
+        val newPerson = { _: View ->
+            picking = true
+            PickContactActivity.start(this) { p ->
+                picking = false
+                if (p != null) {
+                    val fresh = Store.menu(this)
+                    val folder = fresh.at(path.dropLast(1))
+                    if (folder != null && folder.slots[path.last()] == null) {
+                        folder.slots[path.last()] = p
+                        Store.saveMenu(this, fresh)
+                        WidgetRenderer.renderAll(this)
+                        Toast.makeText(this, "${Actions.actionVerb(p.action)} ${p.name} → $where", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                onClose()
+            }
+        }
+        val picker = AppPicker(this, newFolder, newPerson) { app, _ ->
             val fresh = Store.menu(this)
             val folder = fresh.at(path.dropLast(1))
             if (folder != null && folder.slots[path.last()] == null) {
@@ -190,10 +201,13 @@ class FlickActivity : Activity(), FlickView.Listener {
         overridePendingTransition(0, 0)
     }
 
+    /** True while the contact picker is on top (so leaving doesn't close us). */
+    private var picking = false
+
     // Leaving (home button, another app on top): close, so the next widget tap starts fresh.
     override fun onStop() {
         super.onStop()
-        if (!isFinishing) finish()
+        if (!isFinishing && !picking) finish()
     }
 
     companion object {

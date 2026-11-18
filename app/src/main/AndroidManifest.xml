@@ -5,6 +5,9 @@
     <!-- Optional, granted in Settings: lets the app picker start with the apps you used last. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Optional, asked when you add a "Call" person: start the call right away (else the dialer opens). -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <queries>
         <!-- Lists your apps (with launcher icons) for the menu editor, and opens them. -->
@@ -17,6 +20,17 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.HOME" />
         </intent>
+        <!-- People: dialer, SMS and WhatsApp, for opening chats/calls and showing their icons. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
         <!-- The Widget Updater, which checks for new builds and installs them. -->
         <package android:name="com.jono.widgetupdater" />
     </queries>
@@ -46,6 +60,13 @@
             android:name=".MapActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+
+        <!-- Adding a person: the system contact picker, then Call / Text / WhatsApp. -->
+        <activity
+            android:name=".PickContactActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/Overlay" />
 
         <!-- The flick overlay: see-through, over the home screen, centred on the widget. -->
         <activity
