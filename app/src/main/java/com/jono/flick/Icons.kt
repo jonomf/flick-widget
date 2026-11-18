@@ -12,12 +12,19 @@ import android.graphics.drawable.Drawable
 
 /** App icons (the real installed icon) and folder icons (a 2×2 preview of what's inside). */
 object Icons {
-    private val drawables = HashMap<String, Drawable?>()
+    // Synchronized: the widget is drawn on a worker thread while the ring draws on the main one.
+    private val drawables: MutableMap<String, Drawable?> = java.util.Collections.synchronizedMap(HashMap())
 
     fun appDrawable(ctx: Context, pkg: String): Drawable? =
         drawables.getOrPut(pkg) { runCatching { ctx.packageManager.getApplicationIcon(pkg) }.getOrNull() }
 
-    private val photos = HashMap<String, Bitmap?>()
+    private val photos: MutableMap<String, Bitmap?> = java.util.Collections.synchronizedMap(HashMap())
+
+    /** A copy to draw with (bounds are per-copy, so two threads can draw the same icon safely). */
+    private fun drawCopy(ctx: Context, pkg: String): Drawable? {
+        val d = appDrawable(ctx, pkg) ?: return null
+        return d.constantState?.newDrawable(ctx.resources)?.mutate() ?: d
+    }
 
     fun clear() {
         drawables.clear()
@@ -58,7 +65,7 @@ object Icons {
         val bx = x + size - b
         val by = y + size - b
         c.drawCircle(bx + b / 2, by + b / 2, b / 2 + size * 0.03f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ctx.getColor(R.color.widget_bg) })
-        appDrawable(ctx, pkg)?.let {
+        drawCopy(ctx, pkg)?.let {
             it.setBounds(bx.toInt(), by.toInt(), (bx + b).toInt(), (by + b).toInt())
             it.draw(c)
         }
@@ -74,7 +81,7 @@ object Icons {
     /** Draws a slot's icon into the square at ([x], [y]) of side [size]. */
     fun draw(ctx: Context, c: Canvas, slot: Slot, x: Float, y: Float, size: Float) {
         when (slot) {
-            is Slot.App -> appDrawable(ctx, slot.pkg)?.let {
+            is Slot.App -> drawCopy(ctx, slot.pkg)?.let {
                 it.setBounds(x.toInt(), y.toInt(), (x + size).toInt(), (y + size).toInt())
                 it.draw(c)
             } ?: run {
@@ -99,7 +106,7 @@ object Icons {
                     val ix = cx + (r * Math.sin(a)).toFloat()
                     val iy = cy - (r * Math.cos(a)).toFloat()
                     when (val s = slot.slots[i]) {
-                        is Slot.App -> appDrawable(ctx, s.pkg)?.let {
+                        is Slot.App -> drawCopy(ctx, s.pkg)?.let {
                             it.setBounds((ix - mini / 2).toInt(), (iy - mini / 2).toInt(), (ix + mini / 2).toInt(), (iy + mini / 2).toInt())
                             it.draw(c)
                         }

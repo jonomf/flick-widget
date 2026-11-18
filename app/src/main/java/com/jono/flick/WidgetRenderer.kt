@@ -74,17 +74,31 @@ object WidgetRenderer {
     /** True while the flick ring is open over the widget: the widget is drawn blank. */
     private var blank = false
 
-    /** Blanks the widget (ring open over it) or brings it back. */
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    /**
+     * Fades the widget's buttons out (ring open over it) or back in. The background stays. Done
+     * off the main thread so the ring never waits for it; the layouts animate the change.
+     */
     fun setBlank(ctx: Context, on: Boolean) {
         if (blank == on) return
         blank = on
-        renderAll(ctx)
+        val app = ctx.applicationContext
+        worker.execute { runCatching { renderAll(app) } }
     }
 
+    @Synchronized
     fun renderAll(ctx: Context) {
         val mgr = AppWidgetManager.getInstance(ctx)
         val ids = mgr.getAppWidgetIds(ComponentName(ctx, FlickWidget::class.java))
         if (ids.isEmpty()) return
+        if (blank) {
+            // Light update: only hide the buttons; everything else stays as it was drawn.
+            mgr.updateAppWidget(ids, RemoteViews(Kind.values().associate { k ->
+                k.size to RemoteViews(ctx.packageName, k.layout).apply { setViewVisibility(R.id.content, View.INVISIBLE) }
+            }))
+            return
+        }
         RefreshJob.ensure(ctx)
         Icons.clear()
         val menu = Store.menu(ctx)
@@ -108,10 +122,7 @@ object WidgetRenderer {
         bmp: (Slot) -> Bitmap, recentBmp: (String) -> Bitmap,
     ): RemoteViews {
         val rv = RemoteViews(ctx.packageName, k.layout)
-        val vis = if (blank) View.INVISIBLE else View.VISIBLE
-        rv.setViewVisibility(R.id.content, vis)
-        if (k != Kind.TILE) rv.setViewVisibility(R.id.bg, vis)
-        if (blank) return rv
+        rv.setViewVisibility(R.id.content, View.VISIBLE)
         val hubIntent = mutable(ctx, 1, FlickActivity.intent(ctx))
         rv.setOnClickPendingIntent(R.id.hub, hubIntent)
 

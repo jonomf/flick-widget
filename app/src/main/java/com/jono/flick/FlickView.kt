@@ -163,8 +163,21 @@ class FlickView(
         scheduleTimeout(4500)
         // No flick yet after a moment: show the ring on the widget.
         removeCallbacks(autoRing)
+        removeCallbacks(preBlank)
         val delay = Store.ringDelayMs(context)
-        if (!assign && delay > 0) postDelayed(autoRing, delay)
+        if (!assign && delay > 0) {
+            postDelayed(autoRing, delay)
+            // Start fading the widget's buttons a little early, so they're gone as the ring appears.
+            postDelayed(preBlank, max(0L, delay - 250L))
+        }
+    }
+
+    private var preBlanked = false
+    private val preBlank = Runnable {
+        if (mode == Mode.ARMED) {
+            preBlanked = true
+            invalidate()
+        }
     }
 
     private val autoRing = Runnable { if (mode == Mode.ARMED) showRing(root, anchor, emptyList()) }
@@ -178,6 +191,8 @@ class FlickView(
 
     private fun showRing(f: Slot.Folder, at: Recognizer.Pt, path: List<Int>) {
         removeCallbacks(autoRing)
+        removeCallbacks(preBlank)
+        preBlanked = false
         ringFolder = f
         ringPath = path
         ringAt = clamp(at)
@@ -224,6 +239,16 @@ class FlickView(
                 removeCallbacks(timeout)
                 removeCallbacks(autoRing)
                 if (mode == Mode.RESULT) return true
+                removeCallbacks(preBlank)
+                preBlanked = false
+                // Undo after removing something: tap the message.
+                val hr = hintRect
+                if (mode == Mode.RING && undoRemove != null && hr != null &&
+                    RectF(hr).apply { inset(-dp(14f), -dp(14f)) }.contains(e.x, e.y)
+                ) {
+                    undoLastRemove()
+                    return true
+                }
                 // Ring open by tap: pressing an item may become a drag to move it.
                 pressItem = if (mode == Mode.RING && !assign) itemAt(e.x, e.y) else -1
                 pressAt = Recognizer.Pt(e.x, e.y)
@@ -394,6 +419,7 @@ class FlickView(
         dragAt = Recognizer.Pt(x, y)
         val d = Recognizer.dist(ringAt, dragAt)
         val h = when {
+            Recognizer.dist(deletePos(), dragAt) < bubbleR * 1.3f -> DELETE
             d < hubR -> HUB
             d > ringR + bubbleR * 1.8f -> NONE
             d < geo.deadZone -> NONE
@@ -441,6 +467,54 @@ class FlickView(
      * Let go: on an empty spot, move it there; on a folder, into that folder (same direction
      * if free, else its first free spot); on another item, swap them. Anywhere else: no change.
      */
+    /** The remove target: above the ring (below it when there's no room above). */
+    private fun deletePos(): Recognizer.Pt {
+        val above = ringAt.y - ringR - bubbleR - dp(52f)
+        return Recognizer.Pt(ringAt.x, if (above > dp(44f)) above else ringAt.y + ringR + bubbleR + dp(52f))
+    }
+
+    private var undoRemove: Triple<List<Int>, Int, Slot>? = null
+    private var hintRect: RectF? = null
+
+    private fun remove(parentPath: List<Int>, idx: Int, item: Slot) {
+        val parent = root.at(parentPath) ?: return
+        if (parent.slots[idx] !== item) return
+        parent.slots[idx] = null
+        undoRemove = Triple(parentPath, idx, item)
+        Store.saveMenu(context, root)
+        WidgetRenderer.renderAll(context)
+        buzz(HapticFeedbackConstants.CONFIRM)
+        showHint("Removed ${item.label} · tap here to undo", 4000)
+        showRing(ringFolder, ringAt, ringPath)
+    }
+
+    private fun undoLastRemove() {
+        val (parentPath, idx, item) = undoRemove ?: return
+        undoRemove = null
+        val parent = root.at(parentPath)
+        if (parent != null && parent.slots[idx] == null) {
+            parent.slots[idx] = item
+            Store.saveMenu(context, root)
+            WidgetRenderer.renderAll(context)
+            buzz(HapticFeedbackConstants.CONFIRM)
+            showHint("Put back ${item.label}", 1400)
+        }
+        showRing(ringFolder, ringAt, ringPath)
+    }
+
+    private val clearHint = Runnable {
+        resultHint = null
+        undoRemove = null
+        invalidate()
+    }
+
+    private fun showHint(msg: String, ms: Long) {
+        resultHint = msg
+        removeCallbacks(clearHint)
+        postDelayed(clearHint, ms)
+        invalidate()
+    }
+
     private fun drop() {
         removeCallbacks(dragTick)
         val item = dragItem
@@ -448,6 +522,23 @@ class FlickView(
         val srcIdx = dragFrom.last()
         val h = dragHover
         mode = Mode.RING
+        if (h == DELETE && item != null && srcParent != null) {
+            dragItem = null
+            val parentPath = dragFrom.dropLast(1)
+            if (item is Slot.Folder && item.slots.any { it != null }) {
+                showRing(ringFolder, ringAt, ringPath)
+                removeCallbacks(timeout)
+                android.app.AlertDialog.Builder(context)
+                    .setMessage("Remove the folder \"${item.name}\" and everything in it?")
+                    .setPositiveButton("Remove") { _, _ -> remove(parentPath, srcIdx, item) }
+                    .setNegativeButton("Cancel") { _, _ -> showRing(ringFolder, ringAt, ringPath) }
+                    .setOnCancelListener { showRing(ringFolder, ringAt, ringPath) }
+                    .show()
+            } else {
+                remove(parentPath, srcIdx, item)
+            }
+            return
+        }
         var msg: String? = null
         if (item != null && srcParent != null && h >= 0 && srcParent.slots[srcIdx] === item) {
             val target = ringFolder.slots[h]
@@ -482,8 +573,8 @@ class FlickView(
             Store.saveMenu(context, root)
             WidgetRenderer.renderAll(context)
             buzz(HapticFeedbackConstants.CONFIRM)
-            resultHint = msg
-            postDelayed({ resultHint = null; invalidate() }, 1400)
+            undoRemove = null
+            showHint(msg, 1400)
         }
         showRing(ringFolder, ringAt, ringPath)
     }
@@ -492,7 +583,8 @@ class FlickView(
 
     override fun onDraw(c: Canvas) {
         val r = rec
-        val ringVisible = mode == Mode.RING || mode == Mode.DRAG || (mode == Mode.GESTURE && r?.shown == true)
+        val ringVisible = mode == Mode.RING || mode == Mode.DRAG || (mode == Mode.GESTURE && r?.shown == true) ||
+            (mode == Mode.ARMED && preBlanked)
         if (ringVisible != lastRingShown) {
             lastRingShown = ringVisible
             post { listener.onRingShown(ringVisible) }
@@ -514,11 +606,12 @@ class FlickView(
             Mode.ARMED -> drawAnchor(c)
             Mode.RING -> {
                 drawRing(c, ringFolder, ringAt, -1, ringPath.isNotEmpty())
-                resultHint?.let { drawChip(c, ringAt.x, ringAt.y + ringR + bubbleR + dp(40f), it, text, 260f) }
+                hintRect = resultHint?.let { drawChip(c, ringAt.x, hintY(), it, text, 260f) }
             }
             Mode.DRAG -> {
                 val skip = if (ringPath == dragFrom.dropLast(1)) dragFrom.last() else -1
                 drawRing(c, ringFolder, ringAt, dragHover, ringPath.isNotEmpty(), skip)
+                drawDeleteTarget(c, dragHover == DELETE)
                 if (dragHover == HUB && ringPath.isNotEmpty()) {
                     outline.color = accent
                     outline.alpha = 255
@@ -643,8 +736,34 @@ class FlickView(
         }
     }
 
-    /** Text on a small rounded backing so it reads over any wallpaper. */
-    private fun drawChip(c: Canvas, x: Float, y: Float, label: String, p: TextPaint, maxDp: Float = 96f) {
+    /** Messages go below the ring, or above it when the remove target is below. */
+    private fun hintY(): Float {
+        val below = ringAt.y + ringR + bubbleR + dp(40f)
+        return if (below < height - dp(40f)) below else ringAt.y - ringR - bubbleR - dp(40f)
+    }
+
+    private fun drawDeleteTarget(c: Canvas, on: Boolean) {
+        val p = deletePos()
+        val r = if (on) bubbleR * 1.15f else bubbleR * 0.85f
+        fill.color = if (on) context.getColor(android.R.color.holo_red_dark) else surface
+        fill.alpha = 240
+        c.drawCircle(p.x, p.y, r, fill)
+        fill.alpha = 255
+        val ink = if (on) Color.WHITE else onSurface
+        val x = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ink
+            style = Paint.Style.STROKE
+            strokeWidth = dp(3f)
+            strokeCap = Paint.Cap.ROUND
+        }
+        val k = r * 0.38f
+        c.drawLine(p.x - k, p.y - k, p.x + k, p.y + k, x)
+        c.drawLine(p.x + k, p.y - k, p.x - k, p.y + k, x)
+        drawChip(c, p.x, p.y + r + dp(13f), "Remove", text)
+    }
+
+    /** Text on a small rounded backing so it reads over any wallpaper. Returns where it was drawn. */
+    private fun drawChip(c: Canvas, x: Float, y: Float, label: String, p: TextPaint, maxDp: Float = 96f): RectF {
         val maxW = min(width * 0.9f, if (p === bigText) width * 0.9f else dp(maxDp))
         val t = TextUtils.ellipsize(label, p, maxW, TextUtils.TruncateAt.END).toString()
         val w = p.measureText(t)
@@ -652,14 +771,17 @@ class FlickView(
         val h = p.textSize + dp(6f)
         fill.color = surface
         fill.alpha = 225
-        c.drawRoundRect(RectF(x - w / 2 - padH, y - h / 2, x + w / 2 + padH, y + h / 2), h / 2, h / 2, fill)
+        val rect = RectF(x - w / 2 - padH, y - h / 2, x + w / 2 + padH, y + h / 2)
+        c.drawRoundRect(rect, h / 2, h / 2, fill)
         fill.alpha = 255
         c.drawText(t, x, y + p.textSize / 3, p)
+        return rect
     }
 
     companion object {
         private const val NONE = -1
         private const val HUB = -2
+        private const val DELETE = -3
         /** Hold over a folder (or the centre) this long while dragging to open it (or go up). */
         private const val DRAG_OPEN_MS = 450L
     }
