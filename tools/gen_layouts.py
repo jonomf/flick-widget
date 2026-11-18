@@ -138,21 +138,28 @@ def recents(n, w="match_parent", h="wrap_content", weight=""):
 </LinearLayout>'''
 
 
-def wide():
-    rows = []
-    for r in range(2):
-        cells = "\n".join(cell(r * 4 + i, True) for i in range(4))
-        rows.append(f'''<LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
-    android:layout_weight="1" android:orientation="horizontal">
-{indent(cells, 4)}
+def side_cell(i):
+    """A recent item beside the ring: icon over a one-line label."""
+    return f'''<LinearLayout android:id="@+id/q{i}" style="@style/Cell"
+    android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+    <ImageView android:id="@+id/q{i}i" style="@style/CellIcon" />
+    <TextView android:id="@+id/q{i}t" style="@style/CellLabel" />
+</LinearLayout>'''
+
+
+def wide(columns):
+    """3x2 / 4x2: the 2x2 ring on the left, columns of 2 recent items on the right."""
+    cols = []
+    for c in range(columns):
+        cols.append(f'''<LinearLayout android:layout_width="0dp" android:layout_height="match_parent"
+    android:layout_weight="1" android:orientation="vertical">
+{indent(side_cell(c * 2), 4)}
+{indent(side_cell(c * 2 + 1), 4)}
 </LinearLayout>''')
     return f'''    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
-        android:orientation="horizontal" android:gravity="center_vertical">
-{indent(hub(extra=' android:layout_marginEnd="6dp" android:padding="6dp"'), 8)}
-        <LinearLayout android:layout_width="0dp" android:layout_height="match_parent"
-            android:layout_weight="1" android:orientation="vertical">
-{indent(chr(10).join(rows), 12)}
-        </LinearLayout>
+        android:orientation="horizontal">
+{indent(ring(False, w="0dp", weight=' android:layout_weight="2"'), 8)}
+{indent(chr(10).join(cols), 8)}
     </LinearLayout>'''
 
 
@@ -165,7 +172,8 @@ LAYOUTS = {
     "widget_column_l": column(5),
     "widget_ring": indent(ring(False), 4),
     "widget_ring_l": indent(ring(True), 4),
-    "widget_wide": wide(),
+    "widget_wide": wide(1),
+    "widget_wide_l": wide(2),
     "widget_tall": f'''    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
         android:orientation="vertical">
 {indent(ring(False, h="0dp", weight=' android:layout_weight="1"'), 8)}

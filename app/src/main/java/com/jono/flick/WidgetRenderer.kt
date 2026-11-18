@@ -47,8 +47,8 @@ object WidgetRenderer {
         COLUMN(R.layout.widget_column, SizeF(50f, 120f), "hub + 3 items stacked", cells = 3, ring = false, labels = false, recents = 0),
         COLUMN_L(R.layout.widget_column_l, SizeF(50f, 205f), "hub + 5 items stacked", cells = 5, ring = false, labels = false, recents = 0),
         RING(R.layout.widget_ring, SizeF(150f, 120f), "ring of 8 around the hub", cells = 8, ring = true, labels = false, recents = 0),
-        WIDE(R.layout.widget_wide, SizeF(250f, 120f), "hub + 8 labelled items", cells = 8, ring = false, labels = true, recents = 0),
-        WIDE_L(R.layout.widget_wide, SizeF(340f, 120f), "hub + 8 labelled items", cells = 8, ring = false, labels = true, recents = 0),
+        WIDE(R.layout.widget_wide, SizeF(250f, 120f), "ring | 2 recent", cells = 8, ring = true, labels = false, recents = 0),
+        WIDE_L(R.layout.widget_wide_l, SizeF(340f, 120f), "ring | 4 recent", cells = 8, ring = true, labels = false, recents = 0),
         TALL(R.layout.widget_tall, SizeF(150f, 205f), "ring + 3 recent", cells = 8, ring = true, labels = false, recents = 3),
         RING_L(R.layout.widget_ring_l, SizeF(250f, 205f), "labelled ring", cells = 8, ring = true, labels = true, recents = 0),
         XL_WIDE(R.layout.widget_xl_wide, SizeF(340f, 205f), "labelled ring | 4 recent", cells = 8, ring = true, labels = true, recents = 4),
@@ -56,11 +56,17 @@ object WidgetRenderer {
 
         /** Cells show the apps you used last (2×1), not menu items. */
         val recentApps: Boolean get() = this == ROW_S
+
+        /** Recent items beside the ring (3×2, 4×2): apps, people or links used last. */
+        val sideNodes: Int get() = when (this) { WIDE -> 2; WIDE_L -> 4; else -> 0 }
     }
 
     private val CELL = intArrayOf(R.id.c0, R.id.c1, R.id.c2, R.id.c3, R.id.c4, R.id.c5, R.id.c6, R.id.c7)
     private val CELL_ICON = intArrayOf(R.id.c0i, R.id.c1i, R.id.c2i, R.id.c3i, R.id.c4i, R.id.c5i, R.id.c6i, R.id.c7i)
     private val CELL_TEXT = intArrayOf(R.id.c0t, R.id.c1t, R.id.c2t, R.id.c3t, R.id.c4t, R.id.c5t, R.id.c6t, R.id.c7t)
+    private val SIDE = intArrayOf(R.id.q0, R.id.q1, R.id.q2, R.id.q3)
+    private val SIDE_ICON = intArrayOf(R.id.q0i, R.id.q1i, R.id.q2i, R.id.q3i)
+    private val SIDE_TEXT = intArrayOf(R.id.q0t, R.id.q1t, R.id.q2t, R.id.q3t)
     private val REC = intArrayOf(R.id.r0, R.id.r1, R.id.r2, R.id.r3)
     private val REC_ICON = intArrayOf(R.id.r0i, R.id.r1i, R.id.r2i, R.id.r3i)
     private val REC_TITLE = intArrayOf(R.id.r0t, R.id.r1t, R.id.r2t, R.id.r3t)
@@ -136,10 +142,12 @@ object WidgetRenderer {
         val recentBitmaps = HashMap<String, Bitmap>()
         fun recentBmp(pkg: String) = recentBitmaps.getOrPut(pkg) { Icons.bitmap(ctx, Slot.App(pkg, ""), ICON_PX) }
 
-        val lastApps = RecentApps.get(ctx, Store.launchableApps(ctx), 4)
+        val launchable = Store.launchableApps(ctx)
+        val lastApps = RecentApps.get(ctx, launchable, 4)
+        val lastNodes = RecentApps.nodes(ctx, launchable, 4)
 
         val views = RemoteViews(Kind.values().associate { k ->
-            k.size to fill(ctx, k, menu, recents, lastApps, ::bmp, ::recentBmp)
+            k.size to fill(ctx, k, menu, recents, lastApps, lastNodes, ::bmp, ::recentBmp)
         })
         lastFull = views
         dirty = false
@@ -148,6 +156,7 @@ object WidgetRenderer {
 
     private fun fill(
         ctx: Context, k: Kind, menu: Slot.Folder, recents: List<Store.Recent>, lastApps: List<Slot.App>,
+        lastNodes: List<Slot>,
         bmp: (Slot) -> Bitmap, recentBmp: (String) -> Bitmap,
     ): RemoteViews {
         val rv = RemoteViews(ctx.packageName, k.layout)
@@ -221,6 +230,25 @@ object WidgetRenderer {
                 )
             }
             rv.setOnClickPendingIntent(CELL[c], pi)
+        }
+
+        // Beside the ring (3×2, 4×2): the apps, people or links used last.
+        for (q in 0 until k.sideNodes) {
+            val node = lastNodes.getOrNull(q)
+            if (node == null) {
+                rv.setViewVisibility(SIDE[q], View.INVISIBLE)
+                continue
+            }
+            rv.setViewVisibility(SIDE[q], View.VISIBLE)
+            rv.setImageViewBitmap(SIDE_ICON[q], bmp(node))
+            rv.setTextViewText(SIDE_TEXT[q], node.label)
+            rv.setContentDescription(SIDE[q], node.label)
+            val launch = if (node is Slot.App) LaunchActivity.intent(ctx, node.pkg, node.label, "")
+            else LaunchActivity.slotIntent(ctx, node)
+            rv.setOnClickPendingIntent(
+                SIDE[q],
+                PendingIntent.getActivity(ctx, 800 + q, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE),
+            )
         }
 
         for (r in 0 until k.recents) {

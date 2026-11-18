@@ -60,6 +60,8 @@ def main():
         need = {"hub", "update", "content"} | ({"bg"} if layout != "widget_tile" else set())
         for c in range(cells):
             need |= {f"c{c}", f"c{c}i"} | ({f"c{c}t"} if labels else set())
+        for q in range({"WIDE": 2, "WIDE_L": 4}.get(name, 0)):
+            need |= {f"q{q}", f"q{q}i", f"q{q}t"}
         for r in range(recents):
             need |= {f"r{r}", f"r{r}i", f"r{r}t", f"r{r}s", f"r{r}p"}
         missing = need - have

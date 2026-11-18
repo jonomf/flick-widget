@@ -73,7 +73,9 @@ class FlickActivity : Activity(), FlickView.Listener {
     override fun onLaunch(app: Slot, route: List<String>, x: Float, y: Float) {
         WidgetRenderer.setBlank(this, false)
         val opts = ActivityOptions.makeScaleUpAnimation(view, x.toInt(), y.toInt(), 1, 1)
-        if (Actions.run(this, app, opts.toBundle()) && app is Slot.App) {
+        val ok = Actions.run(this, app, opts.toBundle())
+        if (ok) Store.addNode(this, app)
+        if (ok && app is Slot.App) {
             Store.addRecent(this, app.pkg, app.label, route.joinToString(" › "))
             WidgetRenderer.renderAll(this)
         }
@@ -222,6 +224,10 @@ class FlickActivity : Activity(), FlickView.Listener {
 
     /** While the ring is on screen, blank the widget under it so its icons don't show twice. */
     override fun onRingShown(shown: Boolean) = WidgetRenderer.setBlank(this, shown)
+
+    override fun keepOpen(on: Boolean) {
+        picking = on
+    }
 
     override fun onDestroy() {
         WidgetRenderer.setBlank(this, false)

@@ -33,6 +33,36 @@ object RecentApps {
         }
     }
 
+    /** The phone's recently used apps (with usage access) and when, newest first. */
+    fun timed(ctx: Context, apps: List<Slot.App>): List<Pair<Slot.App, Long>> {
+        if (!hasAccess(ctx)) return emptyList()
+        val byPkg = apps.associateBy { it.pkg }
+        val skip = setOf(ctx.packageName) + homePackages(ctx)
+        return runCatching {
+            val usm = ctx.getSystemService(UsageStatsManager::class.java)
+            val now = System.currentTimeMillis()
+            usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 3 * 24 * 3600_000L, now)
+                .filter { it.lastTimeUsed > 0 && it.packageName !in skip }
+                .groupBy { it.packageName }
+                .mapNotNull { (pkg, list) -> byPkg[pkg]?.let { it to list.maxOf { u -> u.lastTimeUsed } } }
+                .sortedByDescending { it.second }
+        }.getOrDefault(emptyList())
+    }
+
+    /**
+     * What you used last, apps and Flick's people/links together, newest first: what you opened
+     * through Flick, plus the phone's recent apps when usage access is on.
+     */
+    fun nodes(ctx: Context, apps: List<Slot.App>, n: Int): List<Slot> {
+        val skip = setOf(ctx.packageName) + homePackages(ctx)
+        val all: List<Pair<Slot, Long>> = Store.nodes(ctx) + timed(ctx, apps)
+        return all.filter { (s, _) -> s !is Slot.App || s.pkg !in skip }
+            .sortedByDescending { it.second }
+            .distinctBy { Store.key(it.first) }
+            .map { it.first }
+            .take(n)
+    }
+
     /** Up to [n] apps, most recent first, only ones with a launcher icon (not Flick or the home screen). */
     fun get(ctx: Context, apps: List<Slot.App>, n: Int = 3): List<Slot.App> {
         val byPkg = apps.associateBy { it.pkg }

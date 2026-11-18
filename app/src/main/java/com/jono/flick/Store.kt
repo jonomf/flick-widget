@@ -128,6 +128,32 @@ object Store {
 
     // ---------------------------------------------------------------- recents
 
+    /** Same thing in the menu? Apps by package, people by number + action, links by address. */
+    fun key(s: Slot): String = when (s) {
+        is Slot.App -> "app:" + s.pkg
+        is Slot.Contact -> "contact:" + s.number + ":" + s.action
+        is Slot.Link -> "link:" + s.url
+        is Slot.Folder -> "folder:" + s.name
+    }
+
+    /** Anything opened through Flick (apps, people, links), newest first, with when. */
+    fun nodes(ctx: Context): List<Pair<Slot, Long>> {
+        val arr = runCatching { JSONArray(prefs(ctx).getString("nodes", "[]")) }.getOrElse { JSONArray() }
+        return (0 until arr.length()).mapNotNull {
+            val o = arr.getJSONObject(it)
+            slotFromJson(o.getString("slot"))?.let { s -> s to o.getLong("ts") }
+        }
+    }
+
+    fun addNode(ctx: Context, s: Slot) {
+        if (s is Slot.Folder) return
+        val k = key(s)
+        val list = listOf(s to System.currentTimeMillis()) + nodes(ctx).filter { key(it.first) != k }
+        val arr = JSONArray()
+        list.take(12).forEach { (slot, ts) -> arr.put(JSONObject().put("slot", slotToJson(slot)).put("ts", ts)) }
+        prefs(ctx).edit().putString("nodes", arr.toString()).apply()
+    }
+
     class Recent(val pkg: String, val label: String, val route: String)
 
     fun recents(ctx: Context): List<Recent> {

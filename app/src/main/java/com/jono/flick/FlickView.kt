@@ -48,6 +48,8 @@ class FlickView(
         fun onEmptySpot(path: List<Int>): Boolean = false
         /** The ring appeared or went away (to blank the widget under it). */
         fun onRingShown(shown: Boolean) {}
+        /** A picker is about to cover the overlay: don't close when it does. */
+        fun keepOpen(on: Boolean) {}
     }
 
     /** Assign mode: the app being placed, drawn under the finger. */
@@ -446,6 +448,7 @@ class FlickView(
         val d = Recognizer.dist(ringAt, dragAt)
         val h = when {
             Recognizer.dist(deletePos(), dragAt) < bubbleR * 1.3f -> DELETE
+            editable(dragItem) && Recognizer.dist(editPos(), dragAt) < bubbleR * 1.3f -> EDIT
             d < hubR -> HUB
             d > ringR + bubbleR * 1.8f -> NONE
             d < geo.deadZone -> NONE
@@ -499,6 +502,62 @@ class FlickView(
         return Recognizer.Pt(ringAt.x, if (above > dp(44f)) above else ringAt.y + ringR + bubbleR + dp(52f))
     }
 
+    /** The edit target: below the ring (or below the remove target when that's below). */
+    private fun editPos(): Recognizer.Pt {
+        val del = deletePos()
+        val y = if (del.y > ringAt.y) del.y + bubbleR * 2 + dp(40f) else ringAt.y + ringR + bubbleR + dp(52f)
+        return Recognizer.Pt(ringAt.x, y)
+    }
+
+    /** Folders get renamed, links edited, people a new picture. Apps have nothing to edit. */
+    private fun editable(s: Slot?) = s is Slot.Folder || s is Slot.Link || s is Slot.Contact
+
+    private fun editLabel(s: Slot?) = when (s) {
+        is Slot.Folder -> "Rename"
+        is Slot.Link -> "Edit"
+        is Slot.Contact -> "Picture"
+        else -> ""
+    }
+
+    /** Dropped on the edit target: rename / edit / new picture, then back to the ring. */
+    private fun editItem(parentPath: List<Int>, idx: Int, item: Slot) {
+        val parent = root.at(parentPath) ?: return
+        removeCallbacks(timeout)
+        fun saved(msg: String) {
+            Store.saveMenu(context, root)
+            Icons.clear()
+            WidgetRenderer.renderAll(context)
+            buzz(HapticFeedbackConstants.CONFIRM)
+            showHint(msg, 1400)
+            showRing(ringFolder, ringAt, ringPath)
+        }
+        when (item) {
+            is Slot.Folder -> Dialogs.folderName(context, item.name) { name ->
+                item.name = name
+                saved("Renamed to $name")
+            }
+            is Slot.Link -> {
+                listener.keepOpen(true)
+                Dialogs.link(context, item.url, item.name, item.photo, onCancel = { listener.keepOpen(false) }) { l ->
+                    listener.keepOpen(false)
+                    if (parent.slots[idx] === item) parent.slots[idx] = l
+                    saved("Saved ${l.name}")
+                }
+            }
+            is Slot.Contact -> {
+                listener.keepOpen(true)
+                PickContactActivity.pickPhoto(context) { p ->
+                    listener.keepOpen(false)
+                    if (p != null && parent.slots[idx] === item) {
+                        parent.slots[idx] = Slot.Contact(item.name, item.number, item.action, p)
+                        saved("New picture for ${item.name}")
+                    }
+                }
+            }
+            is Slot.App -> {}
+        }
+    }
+
     private var undoRemove: Triple<List<Int>, Int, Slot>? = null
     private var hintRect: RectF? = null
 
@@ -548,6 +607,12 @@ class FlickView(
         val srcIdx = dragFrom.last()
         val h = dragHover
         mode = Mode.RING
+        if (h == EDIT && item != null && srcParent != null) {
+            dragItem = null
+            showRing(ringFolder, ringAt, ringPath)
+            editItem(dragFrom.dropLast(1), srcIdx, item)
+            return
+        }
         if (h == DELETE && item != null && srcParent != null) {
             dragItem = null
             val parentPath = dragFrom.dropLast(1)
@@ -639,6 +704,7 @@ class FlickView(
                 val skip = if (ringPath == dragFrom.dropLast(1)) dragFrom.last() else -1
                 drawRing(c, ringFolder, ringAt, dragHover, ringPath.isNotEmpty(), skip)
                 drawDeleteTarget(c, dragHover == DELETE)
+                if (editable(dragItem)) drawEditTarget(c, dragHover == EDIT, editLabel(dragItem))
                 if (dragHover == HUB && ringPath.isNotEmpty()) {
                     outline.color = accent
                     outline.alpha = 255
@@ -790,6 +856,32 @@ class FlickView(
         return if (below < height - dp(40f)) below else ringAt.y - ringR - bubbleR - dp(40f)
     }
 
+    private fun drawEditTarget(c: Canvas, on: Boolean, label: String) {
+        val p = editPos()
+        val r = if (on) bubbleR * 1.15f else bubbleR * 0.85f
+        fill.color = if (on) highlight else surface
+        fill.alpha = 240
+        c.drawCircle(p.x, p.y, r, fill)
+        fill.alpha = 255
+        if (on) {
+            outline.color = accent
+            outline.alpha = 255
+            c.drawCircle(p.x, p.y, r, outline)
+        }
+        // A pencil: a slanted bar with a point.
+        val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = onSurface
+            style = Paint.Style.STROKE
+            strokeWidth = dp(3.5f)
+            strokeCap = Paint.Cap.ROUND
+        }
+        val k = r * 0.4f
+        c.drawLine(p.x - k, p.y + k, p.x + k, p.y - k, ink)
+        ink.strokeWidth = dp(2f)
+        c.drawLine(p.x - k * 1.25f, p.y + k * 1.25f, p.x - k * 0.75f, p.y + k * 0.75f, ink)
+        drawChip(c, p.x, p.y + r + dp(13f), label, text)
+    }
+
     private fun drawDeleteTarget(c: Canvas, on: Boolean) {
         val p = deletePos()
         val r = if (on) bubbleR * 1.15f else bubbleR * 0.85f
@@ -830,6 +922,7 @@ class FlickView(
         private const val NONE = -1
         private const val HUB = -2
         private const val DELETE = -3
+        private const val EDIT = -4
         /** Hold over a folder (or the centre) this long while dragging to open it (or go up). */
         private const val DRAG_OPEN_MS = 450L
     }

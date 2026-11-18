@@ -12,7 +12,7 @@ class LaunchActivity : Activity() {
         super.onCreate(savedInstanceState)
         // A person (call / text) from the widget.
         intent.getStringExtra(EXTRA_SLOT)?.let { json ->
-            Store.slotFromJson(json)?.let { Actions.run(this, it) }
+            Store.slotFromJson(json)?.let { if (Actions.run(this, it)) Store.addNode(this, it); WidgetRenderer.renderAll(this) }
             finish()
             @Suppress("DEPRECATION")
             overridePendingTransition(0, 0)
@@ -28,6 +28,7 @@ class LaunchActivity : Activity() {
             launch.sourceBounds = intent.sourceBounds
             runCatching { startActivity(launch) }
             Store.addRecent(this, pkg, label, intent.getStringExtra(EXTRA_ROUTE).orEmpty())
+            Store.addNode(this, Slot.App(pkg, label))
             WidgetRenderer.renderAll(this)
         }
         finish()
