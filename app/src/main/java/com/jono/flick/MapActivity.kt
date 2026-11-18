@@ -37,7 +37,7 @@ class MapActivity : Activity(), FlickView.Listener {
     private var undoMenu: Slot.Folder? = null
 
     private lateinit var grid: GridView
-    private lateinit var overlay: FlickView
+    private lateinit var flick: FlickView
     private lateinit var status: TextView
     private lateinit var undo: Button
     private val adapter = Adapter()
@@ -101,10 +101,10 @@ class MapActivity : Activity(), FlickView.Listener {
         col.addView(grid, LinearLayout.LayoutParams(-1, 0, 1f))
         adapter.refresh()
 
-        overlay = FlickView(this, menu, this, assign = true).apply { visibility = View.GONE }
+        flick = FlickView(this, menu, this, assign = true).apply { visibility = View.GONE }
         val frame = Frame(this)
         frame.addView(col, FrameLayout.LayoutParams(-1, -1))
-        frame.addView(overlay, FrameLayout.LayoutParams(-1, -1))
+        frame.addView(flick, FrameLayout.LayoutParams(-1, -1))
         setContentView(frame)
     }
 
@@ -113,13 +113,13 @@ class MapActivity : Activity(), FlickView.Listener {
     /** Tap: show the top ring over the app, tap a spot (or flick) to place it. */
     private fun tapPlace(app: Slot.App, cell: View) {
         val at = centreIn(cell)
-        overlay.carry = app
-        overlay.visibility = View.VISIBLE
-        overlay.openRing(emptyList(), at)
+        flick.carry = app
+        flick.visibility = View.VISIBLE
+        flick.openRing(emptyList(), at)
     }
 
     override fun onAssign(path: List<Int>) {
-        val app = overlay.carry ?: return
+        val app = flick.carry ?: return
         val folder = menu.at(path.dropLast(1)) ?: return
         val i = path.last()
         val old = folder.slots[i]
@@ -132,13 +132,13 @@ class MapActivity : Activity(), FlickView.Listener {
         else "${app.label} → $where"
         (status.parent as View).visibility = View.VISIBLE
         undo.visibility = View.VISIBLE
-        overlay.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        flick.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         onClose()
     }
 
     override fun onClose() {
-        overlay.carry = null
-        overlay.visibility = View.GONE
+        flick.carry = null
+        flick.visibility = View.GONE
     }
 
     private fun undoLast() {
@@ -152,27 +152,27 @@ class MapActivity : Activity(), FlickView.Listener {
 
     private fun save() {
         Store.saveMenu(this, menu)
-        overlay.useMenu(menu)
+        flick.useMenu(menu)
         paths = menu.appPaths()
         adapter.refresh()
         WidgetRenderer.renderAll(this)
     }
 
     override fun onBackPressed() {
-        if (overlay.visibility == View.VISIBLE) onClose() else super.onBackPressed()
+        if (flick.visibility == View.VISIBLE) onClose() else super.onBackPressed()
     }
 
     private fun centreIn(v: View): Recognizer.Pt {
         val a = IntArray(2)
         val b = IntArray(2)
         v.getLocationInWindow(a)
-        overlay.getLocationInWindow(b)
+        flick.getLocationInWindow(b)
         return Recognizer.Pt(a[0] - b[0] + v.width / 2f, a[1] - b[1] + v.height / 2f)
     }
 
     /**
      * Holding an app still for a moment picks it up; from then on the touch is a menu stroke
-     * (handed to the overlay). Moving first scrolls the list as usual.
+     * (handed to the flick). Moving first scrolls the list as usual.
      */
     private inner class Frame(ctx: Context) : FrameLayout(ctx) {
         private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
@@ -186,9 +186,9 @@ class MapActivity : Activity(), FlickView.Listener {
             if (!tracking || downPos < 0 || downPos >= shown.size) return@Runnable
             picked = true
             grid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            overlay.carry = shown[downPos]
-            overlay.visibility = View.VISIBLE
-            overlay.beginAt(downX, downY, SystemClock.uptimeMillis())
+            flick.carry = shown[downPos]
+            flick.visibility = View.VISIBLE
+            flick.beginAt(downX, downY, SystemClock.uptimeMillis())
         }
 
         override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
@@ -196,7 +196,7 @@ class MapActivity : Activity(), FlickView.Listener {
                 forward(e)
                 return true
             }
-            if (overlay.visibility == View.VISIBLE) return false // the ring handles its own touches
+            if (flick.visibility == View.VISIBLE) return false // the ring handles its own touches
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     tracking = true
@@ -226,7 +226,7 @@ class MapActivity : Activity(), FlickView.Listener {
 
         private fun forward(e: MotionEvent) {
             if (e.actionMasked == MotionEvent.ACTION_DOWN) return
-            overlay.onTouchEvent(e)
+            flick.onTouchEvent(e)
             if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) {
                 picked = false
                 tracking = false
