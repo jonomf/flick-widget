@@ -71,6 +71,7 @@ class FlickActivity : Activity(), FlickView.Listener {
     }
 
     override fun onLaunch(app: Slot, route: List<String>, x: Float, y: Float) {
+        WidgetRenderer.setBlank(this, false)
         val opts = ActivityOptions.makeScaleUpAnimation(view, x.toInt(), y.toInt(), 1, 1)
         if (Actions.run(this, app, opts.toBundle()) && app is Slot.App) {
             Store.addRecent(this, app.pkg, app.label, route.joinToString(" › "))
@@ -212,6 +213,8 @@ class FlickActivity : Activity(), FlickView.Listener {
     }
 
     override fun onClose() {
+        // Bring the widget's buttons back now, not when Android gets round to destroying us.
+        WidgetRenderer.setBlank(this, false)
         finish()
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
@@ -231,6 +234,7 @@ class FlickActivity : Activity(), FlickView.Listener {
     // Leaving (home button, another app on top): close, so the next widget tap starts fresh.
     override fun onStop() {
         super.onStop()
+        if (!picking) WidgetRenderer.setBlank(this, false)
         if (!isFinishing && !picking) finish()
     }
 

@@ -76,16 +76,45 @@ object WidgetRenderer {
 
     private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
 
+    /** The last full drawing, re-sent as-is when the buttons come back (nothing to rebuild). */
+    private var lastFull: RemoteViews? = null
+    /** Something changed while blank, so the cached drawing is out of date. */
+    private var dirty = false
+
     /**
-     * Fades the widget's buttons out (ring open over it) or back in. The background stays. Done
-     * off the main thread so the ring never waits for it; the layouts animate the change.
+     * Hides the widget's buttons (ring open over it) or shows them again; the background stays.
+     * Both are tiny updates (just the buttons' visibility), so the launcher applies them at once;
+     * after showing, the full cached drawing is re-sent so the widget stays correct.
      */
     fun setBlank(ctx: Context, on: Boolean) {
         if (blank == on) return
         blank = on
         val app = ctx.applicationContext
-        worker.execute { runCatching { renderAll(app) } }
+        worker.execute {
+            runCatching {
+                if (on) {
+                    sendVisibility(app, View.INVISIBLE)
+                } else {
+                    sendVisibility(app, View.VISIBLE)
+                    val full = lastFull
+                    if (full != null && !dirty) send(app, full) else renderAll(app)
+                }
+            }
+        }
     }
+
+    private fun ids(ctx: Context): IntArray =
+        AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, FlickWidget::class.java))
+
+    private fun send(ctx: Context, views: RemoteViews) {
+        val ids = ids(ctx)
+        if (ids.isNotEmpty()) AppWidgetManager.getInstance(ctx).updateAppWidget(ids, views)
+    }
+
+    /** Only the buttons' visibility; the launcher re-applies it onto what's already drawn. */
+    private fun sendVisibility(ctx: Context, v: Int) = send(ctx, RemoteViews(Kind.values().associate { k ->
+        k.size to RemoteViews(ctx.packageName, k.layout).apply { setViewVisibility(R.id.content, v) }
+    }))
 
     @Synchronized
     fun renderAll(ctx: Context) {
@@ -93,10 +122,8 @@ object WidgetRenderer {
         val ids = mgr.getAppWidgetIds(ComponentName(ctx, FlickWidget::class.java))
         if (ids.isEmpty()) return
         if (blank) {
-            // Light update: only hide the buttons; everything else stays as it was drawn.
-            mgr.updateAppWidget(ids, RemoteViews(Kind.values().associate { k ->
-                k.size to RemoteViews(ctx.packageName, k.layout).apply { setViewVisibility(R.id.content, View.INVISIBLE) }
-            }))
+            dirty = true
+            sendVisibility(ctx, View.INVISIBLE)
             return
         }
         RefreshJob.ensure(ctx)
@@ -114,6 +141,8 @@ object WidgetRenderer {
         val views = RemoteViews(Kind.values().associate { k ->
             k.size to fill(ctx, k, menu, recents, lastApps, ::bmp, ::recentBmp)
         })
+        lastFull = views
+        dirty = false
         mgr.updateAppWidget(ids, views)
     }
 
