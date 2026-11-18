@@ -68,6 +68,8 @@ object WidgetRenderer {
     private val REC_PIP = intArrayOf(R.id.r0p, R.id.r1p, R.id.r2p, R.id.r3p)
 
     private const val ICON_PX = 96
+    /** Folders are tiny radial menus of 8 icons, so they get more pixels. */
+    private const val FOLDER_PX = 144
 
     fun renderAll(ctx: Context) {
         val mgr = AppWidgetManager.getInstance(ctx)
@@ -79,7 +81,7 @@ object WidgetRenderer {
         val recents = Store.recents(ctx)
         // One bitmap per item, shared by every size's layout (keeps the update small).
         val bitmaps = HashMap<Slot, Bitmap>()
-        fun bmp(s: Slot) = bitmaps.getOrPut(s) { Icons.bitmap(ctx, s, ICON_PX) }
+        fun bmp(s: Slot) = bitmaps.getOrPut(s) { Icons.bitmap(ctx, s, if (s is Slot.Folder) FOLDER_PX else ICON_PX) }
         val recentBitmaps = HashMap<String, Bitmap>()
         fun recentBmp(pkg: String) = recentBitmaps.getOrPut(pkg) { Icons.bitmap(ctx, Slot.App(pkg, ""), ICON_PX) }
 

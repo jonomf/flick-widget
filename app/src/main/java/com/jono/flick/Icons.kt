@@ -33,24 +33,34 @@ object Icons {
                 c.drawCircle(x + size / 2, y + size / 2, size / 2, p)
             }
             is Slot.Folder -> {
+                // A tiny radial menu: each item in its compass spot around a centre dot,
+                // empty spots as faint dots, sub-folders as small discs.
+                val cx = x + size / 2
+                val cy = y + size / 2
                 val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ctx.getColor(R.color.folder_bg) }
-                c.drawCircle(x + size / 2, y + size / 2, size / 2, bg)
-                val inner = slot.slots.filterNotNull().take(4)
-                val cell = size * 0.30f
-                val gap = size * 0.04f
-                val start = x + (size - 2 * cell - gap) / 2
-                val top = y + (size - 2 * cell - gap) / 2
-                inner.forEachIndexed { i, s ->
-                    val cx = start + (i % 2) * (cell + gap)
-                    val cy = top + (i / 2) * (cell + gap)
-                    if (s is Slot.App) {
-                        appDrawable(ctx, s.pkg)?.let {
-                            it.setBounds(cx.toInt(), cy.toInt(), (cx + cell).toInt(), (cy + cell).toInt())
+                c.drawCircle(cx, cy, size / 2, bg)
+                val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ctx.getColor(R.color.btn_text) }
+                ink.alpha = 170
+                c.drawCircle(cx, cy, size * 0.05f, ink)
+                val r = size * 0.33f
+                val mini = size * 0.22f
+                for (i in 0 until Slot.SLOTS) {
+                    val a = Math.toRadians(i * 45.0)
+                    val ix = cx + (r * Math.sin(a)).toFloat()
+                    val iy = cy - (r * Math.cos(a)).toFloat()
+                    when (val s = slot.slots[i]) {
+                        is Slot.App -> appDrawable(ctx, s.pkg)?.let {
+                            it.setBounds((ix - mini / 2).toInt(), (iy - mini / 2).toInt(), (ix + mini / 2).toInt(), (iy + mini / 2).toInt())
                             it.draw(c)
                         }
-                    } else {
-                        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ctx.getColor(R.color.btn_text); alpha = 140 }
-                        c.drawCircle(cx + cell / 2, cy + cell / 2, cell / 2.4f, p)
+                        is Slot.Folder -> {
+                            ink.alpha = 150
+                            c.drawCircle(ix, iy, mini * 0.42f, ink)
+                        }
+                        null -> {
+                            ink.alpha = 70
+                            c.drawCircle(ix, iy, size * 0.025f, ink)
+                        }
                     }
                 }
             }
