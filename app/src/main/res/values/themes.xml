@@ -2,7 +2,7 @@
     <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.DayNight" />
 
     <!-- The flick overlay: see-through, full screen, no animation, so it feels part of the home screen. -->
-    <style name="Overlay" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+    <style name="Overlay" parent="@android:style/Theme.DeviceDefault.DayNight">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>

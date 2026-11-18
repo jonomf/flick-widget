@@ -39,6 +39,8 @@ class MainActivity : Activity() {
     private lateinit var updateStatus: TextView
     private lateinit var updaterButton: Button
     private lateinit var dwellButton: Button
+    private lateinit var usageStatus: TextView
+    private lateinit var usageButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +98,16 @@ class MainActivity : Activity() {
 
         // --- Settings ---
         col.addView(heading("Settings"))
+        usageStatus = body("")
+        col.addView(usageStatus)
+        usageButton = Button(this).apply { setOnClickListener { RecentApps.openSettings(this@MainActivity) } }
+        col.addView(usageButton)
+        col.addView(Button(this).apply {
+            text = "App info (if Android says it's a restricted setting)"
+            setOnClickListener {
+                startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }
+        })
         col.addView(Switch(this).apply {
             text = "Practice mode: show what you picked instead of opening it"
             isChecked = Store.practice(this@MainActivity)
@@ -139,6 +151,16 @@ class MainActivity : Activity() {
         menu = Store.menu(this) // Map apps may have changed it
         drawGrid()
         dwellButton.text = "Hold to show the menu: ${Store.dwellMs(this)} ms (tap to change)"
+        val usage = RecentApps.hasAccess(this)
+        usageStatus.text = if (usage) {
+            "✓ Usage access is on: the app picker starts with the 3 apps you used last."
+        } else {
+            "Recent apps in the app picker: right now only apps opened through Flick. With usage access, " +
+                "the picker starts with the 3 apps you used last on your phone. Android warns that usage access " +
+                "lets an app see which apps you use and how often; Flick only reads the last few, on the phone, " +
+                "to fill that row. If Android says it's a restricted setting: App info → ⋮ → Allow restricted settings."
+        }
+        usageButton.text = if (usage) "Usage access settings" else "Allow usage access"
         sizes.text = WidgetRenderer.describeSizes(this)
         WidgetRenderer.renderAll(this)
         val build = UpdateStatus.currentBuild(this)
@@ -262,54 +284,21 @@ class MainActivity : Activity() {
             .show()
     }
 
-    /** App list with a search box. */
+    /** Same picker as everywhere: last 3 apps, then all apps A–Z. */
     private fun pickApp(onPick: (Slot.App) -> Unit) {
-        val all = Store.launchableApps(this)
-        var shown = all
-        val adapter = object : BaseAdapter() {
-            override fun getCount() = shown.size
-            override fun getItem(p: Int) = shown[p]
-            override fun getItemId(p: Int) = p.toLong()
-            override fun getView(p: Int, convert: View?, parent: ViewGroup?): View {
-                val row = (convert as? LinearLayout) ?: LinearLayout(this@MainActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding(dp(16), dp(8), dp(16), dp(8))
-                    addView(ImageView(context), LinearLayout.LayoutParams(dp(36), dp(36)))
-                    addView(TextView(context).apply { textSize = 16f; setPadding(dp(14), 0, 0, 0) })
-                }
-                val app = shown[p]
-                (row.getChildAt(0) as ImageView).setImageDrawable(Icons.appDrawable(this@MainActivity, app.pkg))
-                (row.getChildAt(1) as TextView).text = app.label
-                return row
-            }
-        }
-        val list = ListView(this).apply { this.adapter = adapter }
-        val search = EditText(this).apply {
-            hint = "Search apps"
-            isSingleLine = true
-            addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(e: Editable?) {
-                    val q = e.toString().trim().lowercase()
-                    shown = if (q.isEmpty()) all else all.filter { q in it.label.lowercase() }
-                    adapter.notifyDataSetChanged()
-                }
-            })
-        }
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(8), dp(16), 0)
-            addView(search, LinearLayout.LayoutParams(-1, -2))
-            addView(list, LinearLayout.LayoutParams(-1, dp(420)))
-        }
-        val dialog = AlertDialog.Builder(this).setTitle("Choose an app").setView(box)
-            .setNegativeButton("Cancel", null).create()
-        list.setOnItemClickListener { _, _, p, _ ->
-            onPick(shown[p])
+        lateinit var dialog: AlertDialog
+        val picker = AppPicker(this) { app, _ ->
+            onPick(app)
             dialog.dismiss()
+        }.apply {
+            menu = this@MainActivity.menu
+            setPadding(dp(12), dp(4), dp(12), 0)
         }
+        val box = android.widget.FrameLayout(this).apply {
+            addView(picker, android.widget.FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.7f).toInt()))
+        }
+        dialog = AlertDialog.Builder(this).setTitle("Choose an app").setView(box)
+            .setNegativeButton("Cancel", null).create()
         dialog.show()
     }
 

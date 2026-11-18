@@ -7,6 +7,13 @@ import android.content.Intent
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.WindowManager
+import android.graphics.Typeface
+import android.view.Gravity
+import android.view.View
+import android.view.WindowInsets
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 
 /**
@@ -33,11 +40,13 @@ class FlickActivity : Activity(), FlickView.Listener {
 
     /** Set when a widget's remap pip opened us: the tapped spot gets this app. */
     private var assignApp: Slot.App? = null
+    private lateinit var root: FrameLayout
 
     private fun start(i: Intent) {
         assignApp = i.getStringExtra(EXTRA_ASSIGN_PKG)?.let { Slot.App(it, i.getStringExtra(EXTRA_ASSIGN_LABEL) ?: it) }
         view = FlickView(this, Store.menu(this), this, assign = assignApp != null).apply { carry = assignApp }
-        setContentView(view)
+        root = FrameLayout(this).apply { addView(view, FrameLayout.LayoutParams(-1, -1)) }
+        setContentView(root)
         val bounds: Rect? = i.sourceBounds
         val dm = resources.displayMetrics
         val sx = bounds?.exactCenterX() ?: (dm.widthPixels / 2f)
@@ -84,6 +93,68 @@ class FlickActivity : Activity(), FlickView.Listener {
             else "${app.label} → $where"
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
+        onClose()
+    }
+
+    /** A stroke ended on an empty spot: offer to put an app there (then open it). */
+    override fun onEmptySpot(path: List<Int>): Boolean {
+        val menu = Store.menu(this)
+        val where = menu.describe(path)
+        view.visibility = View.INVISIBLE
+        val d = resources.displayMetrics.density
+        fun dp(v: Int) = (v * d).toInt()
+
+        lateinit var panel: FrameLayout
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = getDrawable(R.drawable.panel_bg)
+            setPadding(dp(16), dp(16), dp(16), 0)
+            isClickable = true // taps inside don't close
+        }
+        card.addView(TextView(this).apply {
+            text = "$where is empty"
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(getColor(R.color.widget_text))
+        })
+        card.addView(TextView(this).apply {
+            text = "Pick an app to put there. It opens right away."
+            textSize = 13f
+            setTextColor(getColor(R.color.widget_subtext))
+            setPadding(0, dp(2), 0, dp(4))
+        })
+        val picker = AppPicker(this) { app, _ ->
+            val fresh = Store.menu(this)
+            val folder = fresh.at(path.dropLast(1))
+            if (folder != null && folder.slots[path.last()] == null) {
+                folder.slots[path.last()] = app
+                Store.saveMenu(this, fresh)
+                Toast.makeText(this, "${app.label} → $where", Toast.LENGTH_SHORT).show()
+            }
+            val c = card
+            onLaunch(app, fresh.names(path.dropLast(1)), c.width / 2f, c.top.toFloat())
+        }.apply { this.menu = menu }
+        card.addView(picker, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.62f).toInt()))
+
+        panel = FrameLayout(this).apply {
+            setBackgroundColor(0x88000000.toInt())
+            setOnClickListener { onClose() }
+            addView(card, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply {
+                setMargins(dp(8), 0, dp(8), dp(8))
+            })
+            // Stay above the navigation bar and the keyboard.
+            setOnApplyWindowInsetsListener { v, insets ->
+                val b = insets.getInsets(WindowInsets.Type.ime() or WindowInsets.Type.navigationBars()).bottom
+                v.setPadding(0, 0, 0, b)
+                insets
+            }
+        }
+        root.addView(panel, FrameLayout.LayoutParams(-1, -1))
+        panel.requestApplyInsets()
+        return true
+    }
+
+    override fun onBackPressed() {
         onClose()
     }
 

@@ -31,23 +31,16 @@ import kotlin.math.hypot
  */
 class MapActivity : Activity(), FlickView.Listener {
     private lateinit var menu: Slot.Folder
-    private lateinit var all: List<Slot.App>
-    private var shown = listOf<Slot.App>()
-    private var paths = mapOf<String, List<List<Int>>>()
     private var undoMenu: Slot.Folder? = null
 
-    private lateinit var grid: GridView
+    private lateinit var picker: AppPicker
     private lateinit var flick: FlickView
     private lateinit var status: TextView
     private lateinit var undo: Button
-    private val adapter = Adapter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         menu = Store.menu(this)
-        all = Store.launchableApps(this)
-        shown = all
-        paths = menu.appPaths()
 
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -65,19 +58,6 @@ class MapActivity : Activity(), FlickView.Listener {
             alpha = 0.75f
             setPadding(dp(4), 0, 0, dp(6))
         })
-        col.addView(EditText(this).apply {
-            hint = "Search apps"
-            isSingleLine = true
-            addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(e: Editable?) {
-                    val q = e.toString().trim().lowercase()
-                    shown = if (q.isEmpty()) all else all.filter { q in it.label.lowercase() }
-                    adapter.refresh()
-                }
-            })
-        }, LinearLayout.LayoutParams(-1, -2))
         val statusRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -89,23 +69,19 @@ class MapActivity : Activity(), FlickView.Listener {
         statusRow.addView(undo)
         col.addView(statusRow)
 
-        grid = GridView(this).apply {
-            numColumns = GridView.AUTO_FIT
-            columnWidth = dp(80)
-            stretchMode = GridView.STRETCH_COLUMN_WIDTH
-            verticalSpacing = dp(6)
-            isFastScrollEnabled = true
-            adapter = this@MapActivity.adapter
-            setOnItemClickListener { _, v, pos, _ -> tapPlace(shown[pos], v) }
-        }
-        col.addView(grid, LinearLayout.LayoutParams(-1, 0, 1f))
-        adapter.refresh()
+        picker = AppPicker(this) { app, cell -> tapPlace(app, cell) }.apply { menu = this@MapActivity.menu }
+        col.addView(picker, LinearLayout.LayoutParams(-1, 0, 1f))
 
         flick = FlickView(this, menu, this, assign = true).apply { visibility = View.GONE }
         val frame = Frame(this)
         frame.addView(col, FrameLayout.LayoutParams(-1, -1))
         frame.addView(flick, FrameLayout.LayoutParams(-1, -1))
         setContentView(frame)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        picker.refresh() // recents, and usage access may have just been allowed
     }
 
     // ---------------------------------------------------------------- placing
@@ -153,8 +129,7 @@ class MapActivity : Activity(), FlickView.Listener {
     private fun save() {
         Store.saveMenu(this, menu)
         flick.useMenu(menu)
-        paths = menu.appPaths()
-        adapter.refresh()
+        picker.menu = menu
         WidgetRenderer.renderAll(this)
     }
 
@@ -178,15 +153,16 @@ class MapActivity : Activity(), FlickView.Listener {
         private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
         private var downX = 0f
         private var downY = 0f
-        private var downPos = -1
+        private var downApp: Slot.App? = null
         private var tracking = false
         private var picked = false
 
         private val pickup = Runnable {
-            if (!tracking || downPos < 0 || downPos >= shown.size) return@Runnable
+            val app = downApp
+            if (!tracking || app == null) return@Runnable
             picked = true
-            grid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            flick.carry = shown[downPos]
+            picker.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            flick.carry = app
             flick.visibility = View.VISIBLE
             flick.beginAt(downX, downY, SystemClock.uptimeMillis())
         }
@@ -202,9 +178,9 @@ class MapActivity : Activity(), FlickView.Listener {
                     tracking = true
                     downX = e.x
                     downY = e.y
-                    downPos = positionAt(e.x, e.y)
+                    downApp = appAt(e.x, e.y)
                     removeCallbacks(pickup)
-                    if (downPos >= 0) postDelayed(pickup, PICKUP_MS)
+                    if (downApp != null) postDelayed(pickup, PICKUP_MS)
                 }
                 MotionEvent.ACTION_MOVE -> if (hypot(e.x - downX, e.y - downY) > slop) {
                     tracking = false
@@ -233,79 +209,12 @@ class MapActivity : Activity(), FlickView.Listener {
             }
         }
 
-        private fun positionAt(x: Float, y: Float): Int {
-            val g = IntArray(2)
+        private fun appAt(x: Float, y: Float): Slot.App? {
+            val p = IntArray(2)
             val me = IntArray(2)
-            grid.getLocationInWindow(g)
+            picker.getLocationInWindow(p)
             getLocationInWindow(me)
-            val pos = grid.pointToPosition((x - (g[0] - me[0])).toInt(), (y - (g[1] - me[1])).toInt())
-            return if (pos == GridView.INVALID_POSITION) -1 else pos
-        }
-    }
-
-    // ---------------------------------------------------------------- grid
-
-    private inner class Adapter : BaseAdapter(), SectionIndexer {
-        private var sections = arrayOf<String>()
-        private var sectionStart = intArrayOf()
-
-        fun refresh() {
-            refreshSections()
-            notifyDataSetChanged()
-        }
-
-        private fun refreshSections() {
-            val letters = shown.map { letter(it) }
-            sections = letters.distinct().toTypedArray()
-            sectionStart = IntArray(sections.size) { letters.indexOf(sections[it]) }
-        }
-
-        private fun letter(a: Slot.App): String {
-            val c = a.label.trim().firstOrNull()?.uppercaseChar() ?: '#'
-            return if (c.isLetter()) c.toString() else "#"
-        }
-
-        override fun getCount() = shown.size
-        override fun getItem(p: Int): Any = shown[p]
-        override fun getItemId(p: Int) = p.toLong()
-        override fun getSections(): Array<Any> = arrayOf<Any>(*sections)
-        override fun getPositionForSection(s: Int) = sectionStart.getOrElse(s) { 0 }
-        override fun getSectionForPosition(p: Int): Int {
-            val l = shown.getOrNull(p)?.let { letter(it) } ?: return 0
-            return sections.indexOf(l).coerceAtLeast(0)
-        }
-
-        override fun getView(p: Int, convert: View?, parent: ViewGroup?): View {
-            val cell = (convert as? LinearLayout) ?: LinearLayout(this@MapActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(dp(2), dp(8), dp(2), dp(6))
-                addView(ImageView(context), LinearLayout.LayoutParams(dp(48), dp(48)))
-                addView(TextView(context).apply {
-                    textSize = 12f
-                    gravity = Gravity.CENTER
-                    isSingleLine = true
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                    setPadding(0, dp(4), 0, 0)
-                }, LinearLayout.LayoutParams(-1, -2))
-                addView(TextView(context).apply {
-                    textSize = 10f
-                    gravity = Gravity.CENTER
-                    isSingleLine = true
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                    setTextColor(context.getColor(R.color.accent_text))
-                }, LinearLayout.LayoutParams(-1, -2))
-            }
-            val app = shown[p]
-            (cell.getChildAt(0) as ImageView).setImageDrawable(Icons.appDrawable(this@MapActivity, app.pkg))
-            (cell.getChildAt(1) as TextView).text = app.label
-            val where = paths[app.pkg].orEmpty()
-            (cell.getChildAt(2) as TextView).text = when (where.size) {
-                0 -> ""
-                1 -> menu.describe(where[0])
-                else -> "${menu.describe(where[0])} +${where.size - 1}"
-            }
-            return cell
+            return picker.appAt(x - (p[0] - me[0]), y - (p[1] - me[1]))?.first
         }
     }
 

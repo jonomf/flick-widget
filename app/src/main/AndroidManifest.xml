@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Optional, granted in Settings: lets the app picker start with the apps you used last. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <queries>
         <!-- Lists your apps (with launcher icons) for the menu editor, and opens them. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- The home screen app(s), left out of "recent apps". -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
         </intent>
         <!-- The Widget Updater, which checks for new builds and installs them. -->
         <package android:name="com.jono.widgetupdater" />
@@ -44,7 +54,8 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:taskAffinity="com.jono.flick.overlay"
-            android:theme="@style/Overlay" />
+            android:theme="@style/Overlay"
+            android:windowSoftInputMode="stateHidden" />
 
         <!-- Widget shortcut taps: invisible, opens the app, closes. -->
         <activity

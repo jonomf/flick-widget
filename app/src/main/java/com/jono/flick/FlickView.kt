@@ -44,10 +44,18 @@ class FlickView(
         fun onClose()
         /** Assign mode: the spot chosen (folder indexes, then the slot index). */
         fun onAssign(path: List<Int>) {}
+        /** Normal mode: a stroke ended on an empty spot. Return true to handle it (offer to map it). */
+        fun onEmptySpot(path: List<Int>): Boolean = false
     }
 
     /** Assign mode: the app being placed, drawn under the finger. */
     var carry: Slot.App? = null
+
+    /** Stop the auto-close and hold timers (something else is on screen now). */
+    fun idle() {
+        removeCallbacks(timeout)
+        removeCallbacks(ticker)
+    }
 
     fun useMenu(m: Slot.Folder) {
         root = m
@@ -285,6 +293,8 @@ class FlickView(
             }
             is Recognizer.Result.Spot -> if (assign) {
                 listener.onAssign(gestureBase + res.path)
+            } else if (listener.onEmptySpot(gestureBase + res.path)) {
+                idle()
             } else {
                 buzz(HapticFeedbackConstants.REJECT)
                 back()
