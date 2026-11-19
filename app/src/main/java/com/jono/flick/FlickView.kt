@@ -160,6 +160,7 @@ class FlickView(
     fun arm(at: Recognizer.Pt) {
         anchor = at
         anchorSet = true
+        if (revealWanted) post { reveal() }
         mode = Mode.ARMED
         rec = null
         invalidate()
@@ -190,6 +191,7 @@ class FlickView(
         val f = root.at(path) ?: root
         anchor = at
         anchorSet = true
+        if (revealWanted) post { reveal() }
         showRing(f, at, if (f === root) emptyList() else path)
     }
 
@@ -250,6 +252,7 @@ class FlickView(
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                reveal()
                 removeCallbacks(timeout)
                 removeCallbacks(autoRing)
                 if (mode == Mode.RESULT) return true
@@ -674,7 +677,33 @@ class FlickView(
 
     private var resultHint: String? = null
 
+    /**
+     * Nothing is drawn until the launcher's own opening animation has finished (it zooms the
+     * window out of the widget, which made the marker fly across the screen). Then everything
+     * pops in quickly, in place: a tiny scale and fade around the widget.
+     */
+    private var revealed = false
+
+    private var revealWanted = false
+
+    fun reveal() {
+        if (revealed) return
+        if (!anchorSet) {
+            revealWanted = true // as soon as we know where the widget is
+            return
+        }
+        revealed = true
+        pivotX = anchor.x
+        pivotY = anchor.y
+        alpha = 0f
+        scaleX = 0.94f
+        scaleY = 0.94f
+        animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(REVEAL_MS).start()
+        invalidate()
+    }
+
     override fun onDraw(c: Canvas) {
+        if (!revealed) return
         val r = rec
         val ringVisible = mode == Mode.RING || mode == Mode.DRAG || (mode == Mode.GESTURE && r?.shown == true) ||
             (mode == Mode.GESTURE && gestureFrom == Mode.RING && centreStart) ||
@@ -929,6 +958,7 @@ class FlickView(
         private const val HUB = -2
         private const val DELETE = -3
         private const val EDIT = -4
+        private const val REVEAL_MS = 70L
         /** Hold over a folder (or the centre) this long while dragging to open it (or go up). */
         private const val DRAG_OPEN_MS = 450L
     }

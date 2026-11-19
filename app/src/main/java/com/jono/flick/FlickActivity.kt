@@ -34,6 +34,7 @@ class FlickActivity : Activity(), FlickView.Listener {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        entering = false
         setIntent(intent)
         start(intent)
     }
@@ -56,6 +57,9 @@ class FlickActivity : Activity(), FlickView.Listener {
         // Source bounds are screen coordinates; convert once this view has its real size and place.
         whenLaidOut(v) {
             if (v !== view) return@whenLaidOut // a newer tap replaced this view
+            // Show as soon as the opening animation ends (onEnterAnimationComplete); if the
+            // launcher gives none (e.g. we were already open), shortly after.
+            v.postDelayed({ v.reveal() }, if (entering) 450L else 0L)
             val loc = IntArray(2)
             v.getLocationOnScreen(loc)
             val at = Recognizer.Pt(sx - loc[0], sy - loc[1])
@@ -73,6 +77,15 @@ class FlickActivity : Activity(), FlickView.Listener {
      * Where the tapped widget is, in screen pixels. Launchers sometimes pass no position or an
      * empty one (0,0 — the top-left corner); then use the last good position, else low-centre.
      */
+    /** True from creation until the window's opening animation has finished. */
+    private var entering = true
+
+    override fun onEnterAnimationComplete() {
+        super.onEnterAnimationComplete()
+        entering = false
+        if (::view.isInitialized) view.reveal()
+    }
+
     private fun widgetCentre(b: Rect?): Pair<Float, Float> {
         val dm = resources.displayMetrics
         val prefs = getSharedPreferences("flick", MODE_PRIVATE)
