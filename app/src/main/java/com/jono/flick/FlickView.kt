@@ -159,6 +159,7 @@ class FlickView(
     /** Where the widget is (centre, in this view's coordinates). */
     fun arm(at: Recognizer.Pt) {
         anchor = at
+        anchorSet = true
         mode = Mode.ARMED
         rec = null
         invalidate()
@@ -188,6 +189,7 @@ class FlickView(
     fun openRing(path: List<Int>, at: Recognizer.Pt) {
         val f = root.at(path) ?: root
         anchor = at
+        anchorSet = true
         showRing(f, at, if (f === root) emptyList() else path)
     }
 
@@ -728,7 +730,11 @@ class FlickView(
         }
     }
 
+    /** Set once we know where the widget is; until then nothing is drawn (not at 0,0). */
+    private var anchorSet = false
+
     private fun drawAnchor(c: Canvas) {
+        if (!anchorSet) return
         outline.color = accent
         outline.alpha = 200
         c.drawCircle(anchor.x, anchor.y, hubR, outline)

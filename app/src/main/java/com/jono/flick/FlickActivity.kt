@@ -49,25 +49,55 @@ class FlickActivity : Activity(), FlickView.Listener {
         view = FlickView(this, Store.menu(this), this, assign = assignApp != null).apply { carry = assignApp }
         root = FrameLayout(this).apply { addView(view, FrameLayout.LayoutParams(-1, -1)) }
         setContentView(root)
-        val bounds: Rect? = i.sourceBounds
-        val dm = resources.displayMetrics
-        val sx = bounds?.exactCenterX() ?: (dm.widthPixels / 2f)
-        val sy = bounds?.exactCenterY() ?: (dm.heightPixels * 0.7f)
+        val (sx, sy) = widgetCentre(i.sourceBounds)
         val path = i.getIntArrayExtra(EXTRA_PATH)?.toList().orEmpty()
         val empty = i.getIntArrayExtra(EXTRA_EMPTY)?.toList()
-        // Source bounds are screen coordinates; convert once the view is laid out.
-        view.post {
+        val v = view
+        // Source bounds are screen coordinates; convert once this view has its real size and place.
+        whenLaidOut(v) {
+            if (v !== view) return@whenLaidOut // a newer tap replaced this view
             val loc = IntArray(2)
-            view.getLocationOnScreen(loc)
+            v.getLocationOnScreen(loc)
             val at = Recognizer.Pt(sx - loc[0], sy - loc[1])
             when {
                 // An empty dot on the widget: offer to put an app there (if it's still empty).
                 empty != null && Store.menu(this).at(empty.dropLast(1))?.slots?.getOrNull(empty.last()) == null ->
                     onEmptySpot(empty)
-                path.isEmpty() && assignApp == null -> view.arm(at)
-                else -> view.openRing(path, at)
+                path.isEmpty() && assignApp == null -> v.arm(at)
+                else -> v.openRing(path, at)
             }
         }
+    }
+
+    /**
+     * Where the tapped widget is, in screen pixels. Launchers sometimes pass no position or an
+     * empty one (0,0 — the top-left corner); then use the last good position, else low-centre.
+     */
+    private fun widgetCentre(b: Rect?): Pair<Float, Float> {
+        val dm = resources.displayMetrics
+        val prefs = getSharedPreferences("flick", MODE_PRIVATE)
+        val ok = b != null && !b.isEmpty && b.width() > 4 && b.height() > 4 &&
+            b.centerX() in 1 until dm.widthPixels && b.centerY() in 1 until dm.heightPixels
+        if (ok) {
+            prefs.edit().putFloat("anchor_x", b!!.exactCenterX()).putFloat("anchor_y", b.exactCenterY()).apply()
+            return b.exactCenterX() to b.exactCenterY()
+        }
+        return prefs.getFloat("anchor_x", dm.widthPixels / 2f) to prefs.getFloat("anchor_y", dm.heightPixels * 0.7f)
+    }
+
+    /** Runs [then] once [v] has been laid out (right away if it already has). */
+    private fun whenLaidOut(v: View, then: () -> Unit) {
+        if (v.isLaidOut && v.width > 0 && v.height > 0) {
+            then()
+            return
+        }
+        v.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(x: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, orr: Int, ob: Int) {
+                if (x.width == 0 || x.height == 0) return
+                x.removeOnLayoutChangeListener(this)
+                x.post(then)
+            }
+        })
     }
 
     override fun onLaunch(app: Slot, route: List<String>, x: Float, y: Float) {
