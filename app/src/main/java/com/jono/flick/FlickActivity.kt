@@ -48,6 +48,7 @@ class FlickActivity : Activity(), FlickView.Listener {
         assignApp = i.getStringExtra(EXTRA_ASSIGN_SLOT)?.let { Store.slotFromJson(it) }
             ?: i.getStringExtra(EXTRA_ASSIGN_PKG)?.let { Slot.App(it, i.getStringExtra(EXTRA_ASSIGN_LABEL) ?: it) }
         view = FlickView(this, Store.menu(this), this, assign = assignApp != null).apply { carry = assignApp }
+        view.warmIcons() // icon bitmaps in the background, ready before the ring shows
         root = FrameLayout(this).apply { addView(view, FrameLayout.LayoutParams(-1, -1)) }
         setContentView(root)
         val (sx, sy) = widgetCentre(i.sourceBounds)
@@ -59,7 +60,7 @@ class FlickActivity : Activity(), FlickView.Listener {
             if (v !== view) return@whenLaidOut // a newer tap replaced this view
             // Show as soon as the opening animation ends (onEnterAnimationComplete); if the
             // launcher gives none (e.g. we were already open), shortly after.
-            v.postDelayed({ v.reveal() }, if (entering) 450L else 0L)
+            v.postDelayed({ v.reveal() }, if (entering) 220L else 0L)
             val loc = IntArray(2)
             v.getLocationOnScreen(loc)
             val at = Recognizer.Pt(sx - loc[0], sy - loc[1])

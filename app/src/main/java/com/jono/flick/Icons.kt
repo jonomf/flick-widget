@@ -26,9 +26,46 @@ object Icons {
         return d.constantState?.newDrawable(ctx.resources)?.mutate() ?: d
     }
 
+    // ---------------------------------------------------------------- ring bitmaps
+    // The ring draws each item many times a second while you move. Drawing an app icon, and even
+    // more a folder's tiny radial of 8 icons, is slow on an older phone, so items are drawn once
+    // into bitmaps (in the background, as soon as Flick opens) and the ring just copies those.
+
+    private val ring: MutableMap<Slot, Bitmap> = java.util.Collections.synchronizedMap(java.util.IdentityHashMap())
+    @Volatile private var ringPx = 0
+
+    /** The ready-made bitmap for [s] at the ring's size, if it's been drawn yet. */
+    fun ringBitmap(s: Slot, px: Int): Bitmap? = if (px == ringPx) ring[s] else null
+
+    /**
+     * Draws the bitmaps for the top level and the level under it, plus [extra] (e.g. an item
+     * being placed). Runs on a background thread; [done] is called (on that thread) when finished.
+     */
+    fun warmRing(ctx: Context, root: Slot.Folder, px: Int, extra: Slot? = null, done: () -> Unit = {}) {
+        if (px != ringPx) {
+            ring.clear()
+            ringPx = px
+        }
+        val items = mutableListOf<Slot>()
+        extra?.let { items += it }
+        root.slots.filterNotNull().forEach { s ->
+            items += s
+            if (s is Slot.Folder) items += s.slots.filterNotNull()
+        }
+        for (s in items) {
+            if (ring.containsKey(s)) continue
+            runCatching { ring[s] = bitmap(ctx, s, px) }
+        }
+        done()
+    }
+
+    /** The menu changed (moved, renamed, removed): redraw the bitmaps. */
+    fun clearRing() = ring.clear()
+
     fun clear() {
         drawables.clear()
         photos.clear()
+        ring.clear()
     }
 
     private fun photo(ctx: Context, name: String): Bitmap? = photos.getOrPut(name) {

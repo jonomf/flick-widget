@@ -64,6 +64,8 @@ class FlickView(
 
     fun useMenu(m: Slot.Folder) {
         root = m
+        Icons.clearRing()
+        warmIcons()
         invalidate()
     }
 
@@ -212,6 +214,7 @@ class FlickView(
         ringPath = path
         ringAt = clamp(at)
         ringPos[path] = ringAt
+        if (f !== root) warmIcons(f) // deeper levels: their icons too
         mode = Mode.RING
         rec = null
         invalidate()
@@ -529,8 +532,8 @@ class FlickView(
         val parent = root.at(parentPath) ?: return
         removeCallbacks(timeout)
         fun saved(msg: String) {
-            Store.saveMenu(context, root)
-            Icons.clear()
+            Icons.clear() // pictures may have changed
+            menuChanged()
             WidgetRenderer.renderAll(context)
             buzz(HapticFeedbackConstants.CONFIRM)
             showHint(msg, 1400)
@@ -571,7 +574,7 @@ class FlickView(
         if (parent.slots[idx] !== item) return
         parent.slots[idx] = null
         undoRemove = Triple(parentPath, idx, item)
-        Store.saveMenu(context, root)
+        menuChanged()
         WidgetRenderer.renderAll(context)
         buzz(HapticFeedbackConstants.CONFIRM)
         showHint("Removed ${item.label} · tap here to undo", 4000)
@@ -584,7 +587,7 @@ class FlickView(
         val parent = root.at(parentPath)
         if (parent != null && parent.slots[idx] == null) {
             parent.slots[idx] = item
-            Store.saveMenu(context, root)
+            menuChanged()
             WidgetRenderer.renderAll(context)
             buzz(HapticFeedbackConstants.CONFIRM)
             showHint("Put back ${item.label}", 1400)
@@ -666,7 +669,7 @@ class FlickView(
         }
         dragItem = null
         if (msg != null) {
-            Store.saveMenu(context, root)
+            menuChanged()
             WidgetRenderer.renderAll(context)
             buzz(HapticFeedbackConstants.CONFIRM)
             undoRemove = null
@@ -702,6 +705,38 @@ class FlickView(
         invalidate()
     }
 
+    /** Draws an item's icon: the ready-made bitmap when there is one, else straight from the icon. */
+    private fun drawIcon(c: Canvas, s: Slot, x: Float, y: Float, size: Float) {
+        val b = Icons.ringBitmap(s, size.toInt())
+        if (b != null) {
+            iconRect.set(x, y, x + size, y + size)
+            c.drawBitmap(b, null, iconRect, bitmapPaint)
+        } else {
+            Icons.draw(context, c, s, x, y, size)
+        }
+    }
+
+    private val iconRect = RectF()
+    private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+
+    /** Prepares the ring's icon bitmaps in the background, then redraws. */
+    fun warmIcons(from: Slot.Folder = root) {
+        val ctx = context.applicationContext
+        val m = from
+        val extra = carry
+        val px = iconSize.toInt()
+        Thread {
+            Icons.warmRing(ctx, m, px, extra) { post { invalidate() } }
+        }.apply { priority = Thread.NORM_PRIORITY - 1 }.start()
+    }
+
+    /** Saves a change made in the ring, updates the widget and redraws the changed icons. */
+    private fun menuChanged() {
+        Store.saveMenu(context, root)
+        Icons.clearRing()
+        warmIcons()
+    }
+
     override fun onDraw(c: Canvas) {
         if (!revealed) return
         val r = rec
@@ -722,7 +757,7 @@ class FlickView(
             if (mode == Mode.RING || mode == Mode.GESTURE) {
                 val size = iconSize * 1.2f
                 if (mode == Mode.RING || r?.shown == true) drawChip(c, p.x, p.y - size / 2 - dp(14f), "Place ${item.label}", text)
-                Icons.draw(context, c, item, p.x - size / 2, p.y - size / 2, size)
+                drawIcon(c, item, p.x - size / 2, p.y - size / 2, size)
             }
         }
         when (mode) {
@@ -743,7 +778,7 @@ class FlickView(
                 }
                 dragItem?.let {
                     val size = iconSize * 1.25f
-                    Icons.draw(context, c, it, dragAt.x - size / 2, dragAt.y - size / 2 - dp(36f), size)
+                    drawIcon(c, it, dragAt.x - size / 2, dragAt.y - size / 2 - dp(36f), size)
                 }
             }
             Mode.GESTURE -> if (r != null) {
@@ -797,7 +832,7 @@ class FlickView(
                 if (s != null) {
                     fill.color = surface
                     c.drawCircle(p.x, y, bubbleR, fill)
-                    Icons.draw(context, c, s, p.x - iconSize / 2, y - iconSize / 2, iconSize)
+                    drawIcon(c, s, p.x - iconSize / 2, y - iconSize / 2, iconSize)
                     drawChip(c, p.x, y + bubbleR + dp(14f), (via + s.label).joinToString(" › "), text, 240f)
                 } else if (via.isNotEmpty()) {
                     outline.color = onSurface
@@ -879,7 +914,7 @@ class FlickView(
                 outline.alpha = 255
                 c.drawCircle(x, y, bubbleR * 1.18f, outline)
             }
-            Icons.draw(context, c, s, x - iconSize / 2, y - iconSize / 2, iconSize)
+            drawIcon(c, s, x - iconSize / 2, y - iconSize / 2, iconSize)
             val label = s.label + if (s is Slot.Folder) " ›" else ""
             drawChip(c, x, y + bubbleR + dp(13f), label, text)
         }
