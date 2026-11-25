@@ -77,6 +77,22 @@ class FlickView(
         startGesture(x, y, t)
     }
 
+    /**
+     * Touch-spot mode (the floating spot): the stroke starts on the spot, so there's no armed
+     * state. A plain tap shows the ring there; a stroke that goes nowhere closes.
+     */
+    var spotMode = false
+
+    /** Touch spot: a finger just landed on the spot at [spot] (its centre); start drawing now. */
+    fun beginFromSpot(spot: Recognizer.Pt, x: Float, y: Float, t: Long) {
+        anchor = spot
+        anchorSet = true
+        revealed = true
+        alpha = 1f
+        beginAt(x, y, t)
+        invalidate()
+    }
+
     private enum class Mode { ARMED, GESTURE, RING, RESULT, DRAG }
 
     // DRAG state (ring open by tap: press an item and move it to rearrange).
@@ -368,7 +384,7 @@ class FlickView(
                     resultText = (route + res.app.label).joinToString("  ›  ")
                     mode = Mode.RESULT
                     invalidate()
-                    postDelayed({ arm(anchor) }, 1100)
+                    postDelayed({ if (spotMode) listener.onClose() else arm(anchor) }, 1100)
                 } else {
                     listener.onLaunch(res.app, route, r.point.x, r.point.y)
                 }
@@ -388,7 +404,11 @@ class FlickView(
                 startedOutside -> listener.onClose()
                 // Just armed: a tap (not a flick) closes. In the drawer, holding still then
                 // letting go shows the ring to tap a spot on.
-                gestureFrom == Mode.ARMED -> if (assign) showRing(root, res.at, emptyList()) else listener.onClose()
+                gestureFrom == Mode.ARMED -> when {
+                    spotMode -> showRing(root, anchor, emptyList()) // tap on the touch spot
+                    assign -> showRing(root, res.at, emptyList())
+                    else -> listener.onClose()
+                }
                 // Tap on the centre: up a level, or close at the top (as before).
                 centreStart -> if (ringPath.isEmpty()) listener.onClose()
                     else goUp()
@@ -411,7 +431,7 @@ class FlickView(
 
     /** Back to where the gesture started from (armed, or the ring that was open). */
     private fun back() {
-        if (assign && gestureFrom != Mode.RING) listener.onClose()
+        if ((assign || spotMode) && gestureFrom != Mode.RING) listener.onClose()
         else if (gestureFrom == Mode.RING) showRing(ringFolder, ringAt, ringPath) else arm(anchor)
     }
 
@@ -632,6 +652,8 @@ class FlickView(
                     .setPositiveButton("Remove") { _, _ -> remove(parentPath, srcIdx, item) }
                     .setNegativeButton("Cancel") { _, _ -> showRing(ringFolder, ringAt, ringPath) }
                     .setOnCancelListener { showRing(ringFolder, ringAt, ringPath) }
+                    .create()
+                    .also { Dialogs.overOtherApps(context, it) }
                     .show()
             } else {
                 remove(parentPath, srcIdx, item)

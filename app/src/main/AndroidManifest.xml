@@ -5,6 +5,11 @@
     <!-- Optional, granted in Settings: lets the app picker start with the apps you used last. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Touch spot: Flick draws its own button on screen and keeps it ready (optional, in settings). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Optional, asked when you add a "Call" person: start the call right away (else the dialer opens). -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -117,6 +122,24 @@
             </intent-filter>
             <meta-data android:name="com.jono.widgets.repo" android:value="jonomf/flick-widget" />
             <meta-data android:name="com.jono.widgets.asset" android:value="flick-widget.apk" />
+        </receiver>
+
+        <!-- The touch spot: a floating Flick button you draw from directly. -->
+        <service
+            android:name=".SpotService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating launcher button the user draws gestures from" />
+        </service>
+        <receiver
+            android:name=".SpotBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
         </receiver>
 
         <!-- Redraws the widget every ~15 minutes (keeps the 2×1's last-used apps current). -->

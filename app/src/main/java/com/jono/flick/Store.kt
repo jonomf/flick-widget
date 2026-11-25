@@ -103,6 +103,24 @@ object Store {
 
     // ---------------------------------------------------------------- settings
 
+    // ---------------------------------------------------------------- touch spot
+
+    fun spotOn(ctx: Context): Boolean = prefs(ctx).getBoolean("spot_on", false)
+    fun setSpotOn(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("spot_on", v).apply()
+
+    /** Spot's top-left on screen in pixels; -1 = not placed yet (bottom-right corner). */
+    fun spotX(ctx: Context): Int = prefs(ctx).getInt("spot_x", -1)
+    fun spotY(ctx: Context): Int = prefs(ctx).getInt("spot_y", -1)
+    fun setSpotPos(ctx: Context, x: Int, y: Int) = prefs(ctx).edit().putInt("spot_x", x).putInt("spot_y", y).apply()
+
+    val SPOT_SIZES = listOf(44, 56, 72, 96)
+    fun spotSizeDp(ctx: Context): Int = prefs(ctx).getInt("spot_size", 56)
+    fun setSpotSizeDp(ctx: Context, v: Int) = prefs(ctx).edit().putInt("spot_size", v).apply()
+
+    /** Show the spot only while the home screen is showing (needs usage access). */
+    fun spotHomeOnly(ctx: Context): Boolean = prefs(ctx).getBoolean("spot_home", false)
+    fun setSpotHomeOnly(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("spot_home", v).apply()
+
     fun dwellMs(ctx: Context): Long = prefs(ctx).getLong("dwell", 300L)
     fun setDwellMs(ctx: Context, v: Long) = prefs(ctx).edit().putLong("dwell", v).apply()
 

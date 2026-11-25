@@ -7,6 +7,13 @@ import android.widget.EditText
 import android.widget.LinearLayout
 
 object Dialogs {
+    /** Dialogs opened from the touch spot (a service, not a screen) are shown as an overlay. */
+    fun overOtherApps(ctx: Context, d: AlertDialog) {
+        if (ctx !is android.app.Activity) {
+            d.window?.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        }
+    }
+
     /** Opens the keyboard on [field] as soon as the dialog shows (instead of waiting for a tap). */
     fun AlertDialog.withKeyboard(field: EditText): AlertDialog {
         window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
@@ -75,6 +82,7 @@ object Dialogs {
             .setNegativeButton("Cancel") { _, _ -> onCancel() }
             .setOnCancelListener { onCancel() }
             .create()
+            .also { overOtherApps(ctx, it) }
             .withKeyboard(if (nameIn.text.isEmpty()) nameIn else urlIn)
             .show()
     }
@@ -96,6 +104,7 @@ object Dialogs {
             .setPositiveButton("OK") { _, _ -> onDone(input.text.toString().trim().ifEmpty { "Folder" }) }
             .setNegativeButton("Cancel", null)
             .create()
+            .also { overOtherApps(ctx, it) }
             .withKeyboard(input)
             .show()
     }

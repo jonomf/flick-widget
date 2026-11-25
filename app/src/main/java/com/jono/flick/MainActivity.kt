@@ -40,6 +40,10 @@ class MainActivity : Activity() {
     private lateinit var updaterButton: Button
     private lateinit var dwellButton: Button
     private lateinit var ringDelayButton: Button
+    private lateinit var spotSwitch: Switch
+    private lateinit var spotStatus: TextView
+    private lateinit var spotSizeButton: Button
+    private lateinit var spotHomeSwitch: Switch
     private lateinit var dotButton: Button
     private lateinit var usageStatus: TextView
     private lateinit var usageButton: Button
@@ -99,6 +103,46 @@ class MainActivity : Activity() {
         })
 
         // --- Settings ---
+        // --- Touch spot ---
+        col.addView(heading("Touch spot (no tap first)"))
+        spotStatus = body("")
+        col.addView(spotStatus)
+        spotSwitch = Switch(this).apply {
+            text = "Show the touch spot"
+            setPadding(0, dp(6), 0, dp(6))
+            setOnCheckedChangeListener { _, on -> setSpot(on) }
+        }
+        col.addView(spotSwitch)
+        col.addView(Button(this).apply {
+            text = "Move the spot (drag it, then let go)"
+            setOnClickListener {
+                if (!Store.spotOn(this@MainActivity)) setSpot(true)
+                SpotService.sync(this@MainActivity, SpotService.ACTION_MOVE)
+                moveTaskToBack(true) // show the home screen, where it usually goes
+            }
+        })
+        spotSizeButton = Button(this).apply {
+            setOnClickListener {
+                val sizes = Store.SPOT_SIZES
+                val next = sizes[(sizes.indexOf(Store.spotSizeDp(this@MainActivity)) + 1) % sizes.size]
+                Store.setSpotSizeDp(this@MainActivity, next)
+                SpotService.sync(this@MainActivity)
+                showSpotState()
+            }
+        }
+        col.addView(spotSizeButton)
+        spotHomeSwitch = Switch(this).apply {
+            text = "Only on the home screen"
+            setPadding(0, dp(6), 0, dp(6))
+            setOnCheckedChangeListener { _, on ->
+                Store.setSpotHomeOnly(this@MainActivity, on)
+                if (on && !RecentApps.hasAccess(this@MainActivity)) RecentApps.openSettings(this@MainActivity)
+                SpotService.sync(this@MainActivity)
+                showSpotState()
+            }
+        }
+        col.addView(spotHomeSwitch)
+
         col.addView(heading("Settings"))
         usageStatus = body("")
         col.addView(usageStatus)
@@ -163,6 +207,8 @@ class MainActivity : Activity() {
         menu = Store.menu(this) // Map apps may have changed it
         drawGrid()
         showSettings()
+        SpotService.sync(this)
+        showSpotState()
         val usage = RecentApps.hasAccess(this)
         usageStatus.text = if (usage) {
             "✓ Usage access is on: the app picker starts with the 3 apps you used last."
@@ -346,6 +392,49 @@ class MainActivity : Activity() {
     }
 
     // ---------------------------------------------------------------- settings
+
+    private fun setSpot(on: Boolean) {
+        Store.setSpotOn(this, on)
+        if (on && !android.provider.Settings.canDrawOverlays(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Let Flick draw its spot")
+                .setMessage(
+                    "The touch spot is a small Flick button that Flick draws on screen itself, so you can " +
+                        "start drawing on it straight away, with no app to open. Android calls this " +
+                        "\"Display over other apps\". Flick only uses it for the spot and the ring.\n\n" +
+                        "To stay instant, Flick keeps running quietly, with a silent notification you can hide.",
+                )
+                .setPositiveButton("Open setting") { _, _ -> startActivity(SpotService.overlaySettings(this)) }
+                .setNegativeButton("Not now") { _, _ -> Store.setSpotOn(this, false); showSpotState() }
+                .show()
+        }
+        SpotService.sync(this)
+        showSpotState()
+    }
+
+    private fun showSpotState() {
+        val on = Store.spotOn(this)
+        val allowed = android.provider.Settings.canDrawOverlays(this)
+        spotSwitch.setOnCheckedChangeListener(null)
+        spotSwitch.isChecked = on
+        spotSwitch.setOnCheckedChangeListener { _, v -> setSpot(v) }
+        spotHomeSwitch.setOnCheckedChangeListener(null)
+        spotHomeSwitch.isChecked = Store.spotHomeOnly(this)
+        spotHomeSwitch.setOnCheckedChangeListener { _, v ->
+            Store.setSpotHomeOnly(this, v)
+            if (v && !RecentApps.hasAccess(this)) RecentApps.openSettings(this)
+            SpotService.sync(this)
+            showSpotState()
+        }
+        spotSizeButton.text = "Spot size: ${Store.spotSizeDp(this)} dp (tap to change)"
+        spotStatus.text = when {
+            on && allowed -> "✓ On. Put a finger on the spot and draw: flicks and zigzags start right away. " +
+                "Tap it for the ring. Move it over your widget or into a corner." +
+                if (Store.spotHomeOnly(this) && !RecentApps.hasAccess(this)) " (Only-on-home needs usage access.)" else ""
+            on -> "Needs \"Display over other apps\" for Flick. Turn the switch off and on to open the setting."
+            else -> "A floating Flick spot you draw from directly, no widget tap first, and no wait for Flick to start."
+        }
+    }
 
     private fun showSettings() {
         dwellButton.text = "Hold to show the menu: ${Store.dwellMs(this)} ms (tap to change)"
