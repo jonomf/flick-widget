@@ -152,14 +152,30 @@ class SpotService : Service(), FlickView.Listener {
             if (moving) c.drawCircle(width / 2f, height / 2f, width / 2f - dp(1.5f), ring)
         }
 
+        /** Long press (finger still on the spot): pick the spot up and move it with this touch. */
+        private val longPress = Runnable {
+            val p = spotParams ?: return@Runnable
+            closeLayer()
+            moving = true
+            startPos = p.x to p.y
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            invalidate()
+        }
+
         override fun onTouchEvent(e: MotionEvent): Boolean {
             if (moving) return move(e)
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    downRaw = Recognizer.Pt(e.rawX, e.rawY)
+                    removeCallbacks(longPress)
+                    postDelayed(longPress, LONG_PRESS_MS)
                     val l = openLayer() ?: return true
                     l.beginFromSpot(toLayer(l, spotCentre()), raw(l, e).x, raw(l, e).y, e.eventTime)
                 }
                 else -> layer?.let { l ->
+                    if (e.actionMasked != MotionEvent.ACTION_MOVE ||
+                        Math.hypot((e.rawX - downRaw.x).toDouble(), (e.rawY - downRaw.y).toDouble()) > dp(10f)
+                    ) removeCallbacks(longPress)
                     val copy = MotionEvent.obtain(e)
                     val off = layerOffset(l)
                     copy.offsetLocation(e.rawX - e.x - off.x, e.rawY - e.y - off.y)
@@ -362,6 +378,8 @@ class SpotService : Service(), FlickView.Listener {
 
     companion object {
         private const val NOTE_ID = 7
+        /** Hold the spot this long without moving to move it (the ring shows earlier, at the hold time). */
+        private const val LONG_PRESS_MS = 900L
         private const val CHANNEL = "spot"
         const val ACTION_MOVE = "com.jono.flick.MOVE_SPOT"
         const val ACTION_OFF = "com.jono.flick.SPOT_OFF"

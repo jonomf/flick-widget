@@ -429,7 +429,7 @@ class MainActivity : Activity() {
         spotSizeButton.text = "Spot size: ${Store.spotSizeDp(this)} dp (tap to change)"
         spotStatus.text = when {
             on && allowed -> "✓ On. Put a finger on the spot and draw: flicks and zigzags start right away. " +
-                "Tap it for the ring. Move it over your widget or into a corner." +
+                "Tap it for the ring. Hold it still for about a second to drag it somewhere else." +
                 if (Store.spotHomeOnly(this) && !RecentApps.hasAccess(this)) " (Only-on-home needs usage access.)" else ""
             on -> "Needs \"Display over other apps\" for Flick. Turn the switch off and on to open the setting."
             else -> "A floating Flick spot you draw from directly, no widget tap first, and no wait for Flick to start."
