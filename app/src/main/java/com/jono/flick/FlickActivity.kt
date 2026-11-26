@@ -25,6 +25,7 @@ class FlickActivity : Activity(), FlickView.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra(EXTRA_LOCK, false)) setShowWhenLocked(true)
         window.setDecorFitsSystemWindows(false)
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
@@ -35,6 +36,7 @@ class FlickActivity : Activity(), FlickView.Listener {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         entering = false
+        setShowWhenLocked(intent.getBooleanExtra(EXTRA_LOCK, false))
         setIntent(intent)
         start(intent)
     }
@@ -44,10 +46,17 @@ class FlickActivity : Activity(), FlickView.Listener {
     private lateinit var root: FrameLayout
     private var panelView: View? = null
 
+    /** Opened by the lock screen setting (before or right after unlocking). */
+    private var lockPad = false
+
     private fun start(i: Intent) {
+        lockPad = i.getBooleanExtra(EXTRA_LOCK, false)
         assignApp = i.getStringExtra(EXTRA_ASSIGN_SLOT)?.let { Store.slotFromJson(it) }
             ?: i.getStringExtra(EXTRA_ASSIGN_PKG)?.let { Slot.App(it, i.getStringExtra(EXTRA_ASSIGN_LABEL) ?: it) }
-        view = FlickView(this, Store.menu(this), this, assign = assignApp != null).apply { carry = assignApp }
+        view = FlickView(this, Store.menu(this), this, assign = assignApp != null).apply {
+            carry = assignApp
+            locked = lockPad
+        }
         view.warmIcons() // icon bitmaps in the background, ready before the ring shows
         root = FrameLayout(this).apply { addView(view, FrameLayout.LayoutParams(-1, -1)) }
         setContentView(root)
@@ -69,6 +78,11 @@ class FlickActivity : Activity(), FlickView.Listener {
                 // An empty dot on the widget: offer to put an app there (if it's still empty).
                 empty != null && Store.menu(this).at(empty.dropLast(1))?.slots?.getOrNull(empty.last()) == null ->
                     onEmptySpot(empty)
+                // Lock screen pad: the ring straight away, a little below the middle.
+                lockPad -> {
+                    v.openRing(emptyList(), Recognizer.Pt(v.width / 2f, v.height * 0.6f))
+                    v.reveal()
+                }
                 path.isEmpty() && assignApp == null -> v.arm(at)
                 else -> v.openRing(path, at)
             }
@@ -116,6 +130,22 @@ class FlickActivity : Activity(), FlickView.Listener {
     }
 
     override fun onLaunch(app: Slot, route: List<String>, x: Float, y: Float) {
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        if (lockPad && km.isKeyguardLocked) {
+            // Picked before unlocking: Android's own unlock (your pattern) comes up; the app
+            // opens only once it succeeds.
+            view.visibility = View.INVISIBLE
+            km.requestDismissKeyguard(this, object : android.app.KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() = launchNow(app, route, x, y)
+                override fun onDismissCancelled() = onClose()
+                override fun onDismissError() = onClose()
+            })
+            return
+        }
+        launchNow(app, route, x, y)
+    }
+
+    private fun launchNow(app: Slot, route: List<String>, x: Float, y: Float) {
         WidgetRenderer.setBlank(this, false)
         val opts = ActivityOptions.makeScaleUpAnimation(view, x.toInt(), y.toInt(), 1, 1)
         // Clear the trail now: a slow-starting app can leave this window on screen a while.
@@ -151,6 +181,7 @@ class FlickActivity : Activity(), FlickView.Listener {
 
     /** A stroke ended on an empty spot: offer to put an app there (then open it). */
     override fun onEmptySpot(path: List<Int>): Boolean {
+        if (lockPad) return false // no editing from the lock screen
         panelView?.let { root.removeView(it) }
         val menu = Store.menu(this)
         val where = menu.describe(path)
@@ -301,6 +332,10 @@ class FlickActivity : Activity(), FlickView.Listener {
     companion object {
         const val EXTRA_PATH = "path"
         private const val EXTRA_EMPTY = "empty"
+        private const val EXTRA_LOCK = "lock"
+
+        /** The Flick pad with the lock screen (the lock screen setting). */
+        fun lockIntent(ctx: Context): Intent = intent(ctx).putExtra(EXTRA_LOCK, true)
 
         /** An empty spot tapped on the widget: straight to the app picker for it. */
         fun emptyIntent(ctx: Context, path: List<Int>): Intent =

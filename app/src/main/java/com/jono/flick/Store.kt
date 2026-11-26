@@ -120,6 +120,18 @@ object Store {
     fun spotSizeDp(ctx: Context): Int = prefs(ctx).getInt("spot_size", 56)
     fun setSpotSizeDp(ctx: Context, v: Int) = prefs(ctx).edit().putInt("spot_size", v).apply()
 
+    const val LOCK_OFF = 0
+    const val LOCK_PICK_FIRST = 1
+    const val LOCK_UNLOCK_FIRST = 2
+    val LOCK_NAMES = listOf("off", "pick an app, then unlock", "unlock, then pick an app")
+
+    /** Flick pad with the lock screen: off, before unlocking, or right after. */
+    fun lockMode(ctx: Context): Int = prefs(ctx).getInt("lock_mode", LOCK_OFF)
+    fun setLockMode(ctx: Context, v: Int) = prefs(ctx).edit().putInt("lock_mode", v).apply()
+
+    /** The background service is needed for the spot or the lock screen pad. */
+    fun serviceWanted(ctx: Context) = spotOn(ctx) || lockMode(ctx) != LOCK_OFF
+
     /** Keep the spot exactly over the widget's centre (follows the widget as you use it). */
     fun spotAuto(ctx: Context): Boolean = prefs(ctx).getBoolean("spot_auto", true)
     fun setSpotAuto(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("spot_auto", v).apply()

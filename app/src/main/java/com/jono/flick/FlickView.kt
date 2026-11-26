@@ -83,6 +83,9 @@ class FlickView(
      */
     var spotMode = false
 
+    /** On the lock screen: pick only (no rearranging, no filling empty spots). */
+    var locked = false
+
     /** Touch spot: a finger just landed on the spot at [spot] (its centre); start drawing now. */
     fun beginFromSpot(spot: Recognizer.Pt, x: Float, y: Float, t: Long) {
         anchor = spot
@@ -289,7 +292,7 @@ class FlickView(
                     return true
                 }
                 // Ring open by tap: pressing an item may become a drag to move it.
-                pressItem = if (mode == Mode.RING && !assign) itemAt(e.x, e.y) else -1
+                pressItem = if (mode == Mode.RING && !assign && !locked) itemAt(e.x, e.y) else -1
                 pressAt = Recognizer.Pt(e.x, e.y)
                 startGesture(e.x, e.y, e.eventTime)
             }

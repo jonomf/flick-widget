@@ -45,6 +45,7 @@ class MainActivity : Activity() {
     private lateinit var spotSizeButton: Button
     private lateinit var spotHomeSwitch: Switch
     private lateinit var spotAutoSwitch: Switch
+    private lateinit var lockButton: Button
     private lateinit var dotButton: Button
     private lateinit var usageStatus: TextView
     private lateinit var usageButton: Button
@@ -153,6 +154,13 @@ class MainActivity : Activity() {
             }
         }
         col.addView(spotHomeSwitch)
+        lockButton = Button(this).apply { setOnClickListener { cycleLock() } }
+        col.addView(lockButton)
+        col.addView(body(
+            "Lock screen pad: when the screen wakes, the ring comes up over the lock screen. Pick where " +
+                "you're going first, then Android asks for your pattern and only that app opens. Or: " +
+                "unlock as usual and the ring comes straight up. Tap outside it to skip.",
+        ))
 
         col.addView(heading("Settings"))
         usageStatus = body("")
@@ -429,6 +437,25 @@ class MainActivity : Activity() {
         showSpotState()
     }
 
+    private fun cycleLock() {
+        val next = (Store.lockMode(this) + 1) % Store.LOCK_NAMES.size
+        Store.setLockMode(this, next)
+        if (next != Store.LOCK_OFF && !android.provider.Settings.canDrawOverlays(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Let Flick show over the lock screen")
+                .setMessage(
+                    "To bring up the ring when the screen wakes (or right after you unlock), Flick needs " +
+                        "\"Display over other apps\", and keeps running quietly with a silent notification.\n\n" +
+                        "Your pattern stays Android's: Flick never sees it, and nothing opens until you unlock.",
+                )
+                .setPositiveButton("Open setting") { _, _ -> startActivity(SpotService.overlaySettings(this)) }
+                .setNegativeButton("Not now") { _, _ -> Store.setLockMode(this, Store.LOCK_OFF); showSpotState() }
+                .show()
+        }
+        SpotService.sync(this)
+        showSpotState()
+    }
+
     private fun setSpotAuto(on: Boolean) {
         Store.setSpotAuto(this, on)
         if (on && !WidgetSpot.snap(this)) {
@@ -455,6 +482,7 @@ class MainActivity : Activity() {
             showSpotState()
         }
         spotSizeButton.text = "Spot size: ${Store.spotSizeDp(this)} dp (tap to change)"
+        lockButton.text = "Lock screen pad: ${Store.LOCK_NAMES[Store.lockMode(this)]} (tap to change)"
         spotStatus.text = when {
             on && allowed -> "✓ On. Put a finger on the spot and draw: flicks and zigzags start right away. " +
                 "Tap it for the ring. Hold it still for about a second to drag it somewhere else " +

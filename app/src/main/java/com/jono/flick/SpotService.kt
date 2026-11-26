@@ -59,11 +59,12 @@ class SpotService : Service(), FlickView.Listener {
         registerReceiver(screen, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
         })
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!Store.spotOn(this) || !Settings.canDrawOverlays(this)) {
+        if (!Store.serviceWanted(this) || !Settings.canDrawOverlays(this)) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -71,11 +72,18 @@ class SpotService : Service(), FlickView.Listener {
             ACTION_MOVE -> moving = true
             ACTION_OFF -> {
                 Store.setSpotOn(this, false)
-                stopSelf()
-                return START_NOT_STICKY
+                if (!Store.serviceWanted(this)) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
             }
         }
-        showSpot()
+        if (Store.spotOn(this)) {
+            showSpot()
+        } else {
+            spot?.let { runCatching { wm.removeView(it) } }
+            spot = null
+        }
         startHomeWatch()
         return START_STICKY
     }
@@ -363,8 +371,23 @@ class SpotService : Service(), FlickView.Listener {
 
     private val screen = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
-            if (i.action == Intent.ACTION_SCREEN_ON) startHomeWatch() else main.removeCallbacks(homeWatch)
+            when (i.action) {
+                Intent.ACTION_SCREEN_ON -> {
+                    startHomeWatch()
+                    // Lock screen pad, before unlocking: show the ring over the lock screen.
+                    val km = getSystemService(android.app.KeyguardManager::class.java)
+                    if (Store.lockMode(c) == Store.LOCK_PICK_FIRST && km.isKeyguardLocked) openPad()
+                }
+                // Just unlocked: the pad right after (the other lock screen setting).
+                Intent.ACTION_USER_PRESENT -> if (Store.lockMode(c) == Store.LOCK_UNLOCK_FIRST) openPad()
+                else -> main.removeCallbacks(homeWatch)
+            }
         }
+    }
+
+    private fun openPad() {
+        closeLayer()
+        runCatching { startActivity(FlickActivity.lockIntent(this)) }
     }
 
     // ---------------------------------------------------------------- notification
@@ -383,7 +406,7 @@ class SpotService : Service(), FlickView.Listener {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_fg)
-            .setContentTitle("Flick touch spot is on")
+            .setContentTitle(if (Store.spotOn(this)) "Flick touch spot is on" else "Flick lock screen pad is on")
             .setContentIntent(open)
             .setOngoing(true)
             .addAction(Notification.Action.Builder(null, "Move spot", action(ACTION_MOVE, 1)).build())
@@ -411,7 +434,7 @@ class SpotService : Service(), FlickView.Listener {
 
         /** Starts (or refreshes) the spot if it's turned on and allowed. */
         fun sync(ctx: Context, action: String? = null) {
-            if (Store.spotOn(ctx) && Settings.canDrawOverlays(ctx)) {
+            if (Store.serviceWanted(ctx) && Settings.canDrawOverlays(ctx)) {
                 runCatching {
                     ctx.startForegroundService(Intent(ctx, SpotService::class.java).setAction(action))
                 }
