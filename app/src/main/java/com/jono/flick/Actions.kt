@@ -34,7 +34,7 @@ object Actions {
         val intent = when (item) {
             is Slot.App -> ctx.packageManager.getLaunchIntentForPackage(item.pkg)
             is Slot.Contact -> contactIntent(ctx, item)
-            is Slot.Link -> linkIntent(item.url)
+            is Slot.Link -> linkIntent(ctx, item)
             is Slot.Folder -> null
         }
         if (intent == null) {
@@ -46,6 +46,22 @@ object Actions {
         return runCatching { ctx.startActivity(intent, opts) }.isSuccess.also {
             if (!it) Toast.makeText(ctx, "Couldn't open that", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    const val CHROME = "com.android.chrome"
+
+    /** A link opened its chosen way: its app, a Chrome tab, or Chrome. */
+    fun linkIntent(ctx: Context, l: Slot.Link): Intent? {
+        val i = linkIntent(l.url) ?: return null
+        if (l.open == Slot.Link.APP) return i
+        val browser = if (installed(ctx, CHROME)) CHROME else browserPackage(ctx)
+        if (browser != null) i.setPackage(browser)
+        if (l.open == Slot.Link.TAB) {
+            // A Custom Tab, asked for without any library: the "session" extra is what browsers look for.
+            i.putExtras(Bundle().apply { putBinder("android.support.customtabs.extra.SESSION", null) })
+            i.putExtra("android.support.customtabs.extra.SHARE_STATE", 1)
+        }
+        return i
     }
 
     /** Opens in the app that claims the link (Chat, Discord, …), else the browser. */
@@ -61,6 +77,11 @@ object Actions {
         val pkg = r.activityInfo?.packageName ?: return null
         return if (pkg == "android") browserPackage(ctx) else pkg // "android" = the chooser
     }
+
+    /** The app a link opens in, its way (for the badge). */
+    fun linkPackage(ctx: Context, l: Slot.Link): String? =
+        if (l.open == Slot.Link.APP) linkPackage(ctx, l.url)
+        else if (installed(ctx, CHROME)) CHROME else browserPackage(ctx)
 
     private fun browserPackage(ctx: Context): String? =
         ctx.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")), 0)

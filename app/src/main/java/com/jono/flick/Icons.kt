@@ -77,7 +77,7 @@ object Icons {
         drawPictured(ctx, c, p.name, p.photo, if (badge) Actions.actionPackage(ctx, p.action) else null, x, y, size)
 
     private fun drawLink(ctx: Context, c: Canvas, l: Slot.Link, x: Float, y: Float, size: Float, badge: Boolean) =
-        drawPictured(ctx, c, l.name, l.photo, if (badge) Actions.linkPackage(ctx, l.url) else null, x, y, size)
+        drawPictured(ctx, c, l.name, l.photo, if (badge) Actions.linkPackage(ctx, l) else null, x, y, size)
 
     /** A picture in a circle (or initials), with the app that opens it as a small badge. */
     private fun drawPictured(

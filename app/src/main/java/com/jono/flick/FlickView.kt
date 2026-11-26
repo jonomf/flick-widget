@@ -569,7 +569,7 @@ class FlickView(
             }
             is Slot.Link -> {
                 listener.keepOpen(true)
-                Dialogs.link(context, item.url, item.name, item.photo, onCancel = { listener.keepOpen(false) }) { l ->
+                Dialogs.link(context, item.url, item.name, item.photo, onCancel = { listener.keepOpen(false) }, open = item.open) { l ->
                     listener.keepOpen(false)
                     if (parent.slots[idx] === item) parent.slots[idx] = l
                     saved("Saved ${l.name}")

@@ -28,9 +28,25 @@ sealed class Slot {
      * A link opened in whichever app handles it: a Google Chat space or group, a Discord channel,
      * a Telegram or Slack chat, a web page. [photo] as for people.
      */
-    class Link(val name: String, val url: String, val photo: String? = null) : Slot() {
+    class Link(val name: String, val url: String, val photo: String? = null, val open: String = APP) : Slot() {
         override val label: String get() = name
+
+        fun copy(name: String = this.name, url: String = this.url, photo: String? = this.photo, open: String = this.open) =
+            Link(name, url, photo, open)
+
+        companion object {
+            /** Open in whichever app claims the link (e.g. Claude, Discord), else the browser. */
+            const val APP = "app"
+            /** A Chrome tab inside Flick's flow: quick, full-screen, signed in like Chrome. */
+            const val TAB = "tab"
+            /** Chrome itself. */
+            const val BROWSER = "browser"
+            val MODES = listOf(APP, TAB, BROWSER)
+            val MODE_NAMES = listOf("Its app", "Chrome tab", "Chrome")
+        }
     }
+
+
 
     class Folder(var name: String, val slots: MutableList<Slot?> = MutableList(SLOTS) { null }) : Slot() {
         override val label: String get() = name
@@ -79,3 +95,15 @@ fun Slot.Folder.appPaths(): Map<String, List<List<Int>>> {
 /** A spot in words: folder names, then the direction, e.g. "More › NE" or just "N". */
 fun Slot.Folder.describe(path: List<Int>): String =
     (names(path.dropLast(1)) + Slot.DIRECTIONS[path.last()]).joinToString(" › ")
+
+/** Items → a folder: up to 8 in its spots; with more, the 8th spot becomes "More", and so on. */
+fun folderOf(name: String, items: List<Slot>): Slot.Folder {
+    val f = Slot.Folder(name)
+    if (items.size <= Slot.SLOTS) {
+        items.forEachIndexed { i, l -> f.slots[i] = l }
+    } else {
+        items.take(Slot.SLOTS - 1).forEachIndexed { i, l -> f.slots[i] = l }
+        f.slots[Slot.SLOTS - 1] = folderOf("More", items.drop(Slot.SLOTS - 1))
+    }
+    return f
+}

@@ -14,6 +14,15 @@ class ShareActivity : Activity() {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+        // Several links (e.g. a list of your web apps): one folder of them.
+        val many = Dialogs.findLinks(text)
+        if (many.size >= 2) {
+            Dialogs.linkFolder(this, many, onCancel = { finish() }) { folder ->
+                startActivity(FlickActivity.assignSlotIntent(this, folder))
+                finish()
+            }
+            return
+        }
         val url = Dialogs.findUrl(text) ?: text?.trim()?.takeIf { it.isNotEmpty() && !it.contains(" ") }
         if (url == null) {
             Toast.makeText(this, "Nothing to add: share a link to Flick", Toast.LENGTH_SHORT).show()

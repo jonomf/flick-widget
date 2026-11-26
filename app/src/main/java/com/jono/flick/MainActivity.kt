@@ -89,6 +89,10 @@ class MainActivity : Activity() {
         grid = GridLayout(this).apply { columnCount = 3; rowCount = 3 }
         col.addView(grid, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         col.addView(Button(this).apply {
+            text = "Paste links (one or a list) and place them"
+            setOnClickListener { pasteLinks() }
+        })
+        col.addView(Button(this).apply {
             text = "Reset to the sample menu"
             setOnClickListener {
                 AlertDialog.Builder(this@MainActivity)
@@ -313,7 +317,7 @@ class MainActivity : Activity() {
         }
         if (s is Slot.Link) {
             opt("Edit link or picture…") {
-                Dialogs.link(this, s.url, s.name, s.photo) { l -> f.slots[i] = l; Icons.clear(); save() }
+                Dialogs.link(this, s.url, s.name, s.photo, open = s.open) { l -> f.slots[i] = l; Icons.clear(); save() }
             }
         }
         if (s is Slot.Contact) {
@@ -467,6 +471,20 @@ class MainActivity : Activity() {
         ringDelayButton.text = if (rd == 0L) "After tapping the widget: wait for a flick (ring never shows by itself)"
         else "After tapping the widget: show the ring after $rd ms (tap to change)"
         dotButton.text = "Empty spots: ${Store.DOT_NAMES[Store.dotStyle(this)]} (tap to change)"
+    }
+
+    /** Links from the clipboard: one → a link, several → a folder of them; then tap where it goes. */
+    private fun pasteLinks() {
+        val clip = runCatching {
+            getSystemService(android.content.ClipboardManager::class.java)?.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()
+        }.getOrNull()
+        val links = Dialogs.findLinks(clip)
+        val place = { s: Slot -> startActivity(FlickActivity.assignSlotIntent(this, s)) }
+        when {
+            links.size >= 2 -> Dialogs.linkFolder(this, links) { place(it) }
+            links.size == 1 -> Dialogs.link(this, links[0].second, links[0].first) { place(it) }
+            else -> Toast.makeText(this, "Copy some links first (one per line, with names if you like)", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun cycleRingDelay() {

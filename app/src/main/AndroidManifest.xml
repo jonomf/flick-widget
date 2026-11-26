@@ -40,6 +40,7 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
         </intent>
+        <package android:name="com.android.chrome" />
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
         <!-- The Widget Updater, which checks for new builds and installs them. -->
