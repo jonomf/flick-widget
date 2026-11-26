@@ -118,6 +118,8 @@ class FlickActivity : Activity(), FlickView.Listener {
     override fun onLaunch(app: Slot, route: List<String>, x: Float, y: Float) {
         WidgetRenderer.setBlank(this, false)
         val opts = ActivityOptions.makeScaleUpAnimation(view, x.toInt(), y.toInt(), 1, 1)
+        // Clear the trail now: a slow-starting app can leave this window on screen a while.
+        view.visibility = View.INVISIBLE
         val ok = Actions.run(this, app, opts.toBundle())
         if (ok) Store.addNode(this, app)
         if (ok && app is Slot.App) {

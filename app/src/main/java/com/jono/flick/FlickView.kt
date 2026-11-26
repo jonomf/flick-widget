@@ -95,6 +95,9 @@ class FlickView(
 
     private enum class Mode { ARMED, GESTURE, RING, RESULT, DRAG }
 
+    /** Something is still on screen that wants the layer (a ring to tap, a drag, a message). */
+    val busy: Boolean get() = mode == Mode.RING || mode == Mode.DRAG || mode == Mode.RESULT
+
     // DRAG state (ring open by tap: press an item and move it to rearrange).
     private var pressItem = -1            // slot index pressed in the ring, before it moves
     private var pressAt = Recognizer.Pt(0f, 0f)

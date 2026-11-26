@@ -273,6 +273,12 @@ class SpotService : Service(), FlickView.Listener {
     private fun afterStroke() {
         val l = layer ?: return
         val p = layerParams ?: return
+        // Nothing left to show (the stroke launched, cancelled or went nowhere): remove the layer
+        // so no trail is ever left over another app.
+        if (!l.busy) {
+            l.post { if (layer === l && !l.busy) closeLayer() }
+            return
+        }
         if (p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0) {
             p.flags = p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
             runCatching { wm.updateViewLayout(l, p) }
@@ -284,6 +290,7 @@ class SpotService : Service(), FlickView.Listener {
         layer = null
         layerParams = null
         l.idle()
+        l.visibility = View.GONE
         runCatching { wm.removeView(l) }
         updateSpotVisibility()
     }
