@@ -117,6 +117,10 @@ object Store {
     fun spotSizeDp(ctx: Context): Int = prefs(ctx).getInt("spot_size", 56)
     fun setSpotSizeDp(ctx: Context, v: Int) = prefs(ctx).edit().putInt("spot_size", v).apply()
 
+    /** Keep the spot exactly over the widget's centre (follows the widget as you use it). */
+    fun spotAuto(ctx: Context): Boolean = prefs(ctx).getBoolean("spot_auto", true)
+    fun setSpotAuto(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("spot_auto", v).apply()
+
     /** Show the spot only while the home screen is showing (needs usage access). */
     fun spotHomeOnly(ctx: Context): Boolean = prefs(ctx).getBoolean("spot_home", false)
     fun setSpotHomeOnly(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("spot_home", v).apply()

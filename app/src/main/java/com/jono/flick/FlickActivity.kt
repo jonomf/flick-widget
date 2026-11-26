@@ -54,6 +54,7 @@ class FlickActivity : Activity(), FlickView.Listener {
         val (sx, sy) = widgetCentre(i.sourceBounds)
         val path = i.getIntArrayExtra(EXTRA_PATH)?.toList().orEmpty()
         val empty = i.getIntArrayExtra(EXTRA_EMPTY)?.toList()
+        WidgetSpot.seenFrom(this, i, plainHub = path.isEmpty() && empty == null && assignApp == null)
         val v = view
         // Source bounds are screen coordinates; convert once this view has its real size and place.
         whenLaidOut(v) {
@@ -269,6 +270,12 @@ class FlickActivity : Activity(), FlickView.Listener {
     /** While the ring is on screen, blank the widget under it so its icons don't show twice. */
     override fun onRingShown(shown: Boolean) = WidgetRenderer.setBlank(this, shown)
 
+    // While this screen is up, the touch spot steps aside (it would float over the ring).
+    override fun onStart() {
+        super.onStart()
+        SpotService.cover(true)
+    }
+
     override fun keepOpen(on: Boolean) {
         picking = on
     }
@@ -284,6 +291,7 @@ class FlickActivity : Activity(), FlickView.Listener {
     // Leaving (home button, another app on top): close, so the next widget tap starts fresh.
     override fun onStop() {
         super.onStop()
+        SpotService.cover(false)
         if (!picking) WidgetRenderer.setBlank(this, false)
         if (!isFinishing && !picking) finish()
     }

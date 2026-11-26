@@ -44,6 +44,7 @@ class MainActivity : Activity() {
     private lateinit var spotStatus: TextView
     private lateinit var spotSizeButton: Button
     private lateinit var spotHomeSwitch: Switch
+    private lateinit var spotAutoSwitch: Switch
     private lateinit var dotButton: Button
     private lateinit var usageStatus: TextView
     private lateinit var usageButton: Button
@@ -121,6 +122,12 @@ class MainActivity : Activity() {
                 moveTaskToBack(true) // show the home screen, where it usually goes
             }
         })
+        spotAutoSwitch = Switch(this).apply {
+            text = "Keep the spot on the Flick widget's centre"
+            setPadding(0, dp(6), 0, dp(6))
+            setOnCheckedChangeListener { _, on -> setSpotAuto(on) }
+        }
+        col.addView(spotAutoSwitch)
         spotSizeButton = Button(this).apply {
             setOnClickListener {
                 val sizes = Store.SPOT_SIZES
@@ -418,7 +425,18 @@ class MainActivity : Activity() {
         showSpotState()
     }
 
+    private fun setSpotAuto(on: Boolean) {
+        Store.setSpotAuto(this, on)
+        if (on && !WidgetSpot.snap(this)) {
+            Toast.makeText(this, "Tap your Flick widget once (anywhere on it) and the spot will move there", Toast.LENGTH_LONG).show()
+        }
+        showSpotState()
+    }
+
     private fun showSpotState() {
+        spotAutoSwitch.setOnCheckedChangeListener(null)
+        spotAutoSwitch.isChecked = Store.spotAuto(this)
+        spotAutoSwitch.setOnCheckedChangeListener { _, v -> setSpotAuto(v) }
         val on = Store.spotOn(this)
         val allowed = android.provider.Settings.canDrawOverlays(this)
         spotSwitch.setOnCheckedChangeListener(null)
@@ -435,7 +453,8 @@ class MainActivity : Activity() {
         spotSizeButton.text = "Spot size: ${Store.spotSizeDp(this)} dp (tap to change)"
         spotStatus.text = when {
             on && allowed -> "✓ On. Put a finger on the spot and draw: flicks and zigzags start right away. " +
-                "Tap it for the ring. Hold it still for about a second to drag it somewhere else." +
+                "Tap it for the ring. Hold it still for about a second to drag it somewhere else " +
+                "(that turns off keeping it on the widget)." +
                 if (Store.spotHomeOnly(this) && !RecentApps.hasAccess(this)) " (Only-on-home needs usage access.)" else ""
             on -> "Needs \"Display over other apps\" for Flick. Turn the switch off and on to open the setting."
             else -> "A floating Flick spot you draw from directly, no widget tap first, and no wait for Flick to start."

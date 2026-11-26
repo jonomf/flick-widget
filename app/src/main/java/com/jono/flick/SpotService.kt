@@ -27,6 +27,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import kotlin.math.hypot
 
 /**
  * The touch spot: a small Flick button Flick draws on screen itself (Display over other apps),
@@ -52,6 +53,7 @@ class SpotService : Service(), FlickView.Listener {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         wm = getSystemService(WindowManager::class.java)
         startForeground(NOTE_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         registerReceiver(screen, IntentFilter().apply {
@@ -79,6 +81,7 @@ class SpotService : Service(), FlickView.Listener {
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         main.removeCallbacksAndMessages(null)
         runCatching { unregisterReceiver(screen) }
         closeLayer()
@@ -125,8 +128,11 @@ class SpotService : Service(), FlickView.Listener {
     }
 
     private fun updateSpotVisibility() {
-        spot?.visibility = if (homeShown || moving || layer != null) View.VISIBLE else View.GONE
+        val show = (homeShown && !covered) || moving || layer != null
+        spot?.visibility = if (show) View.VISIBLE else View.GONE
     }
+
+    private var covered = false
 
     /** Spot centre, in screen pixels. */
     private fun spotCentre(): Recognizer.Pt {
@@ -204,6 +210,8 @@ class SpotService : Service(), FlickView.Listener {
                 }
                 MotionEvent.ACTION_UP -> {
                     // Letting go (after a drag or a tap) saves the place and ends placement.
+                    // Placed by hand, so stop snapping it back onto the widget.
+                    if (hypot(e.rawX - downRaw.x, e.rawY - downRaw.y) > dp(8f)) Store.setSpotAuto(this@SpotService, false)
                     Store.setSpotPos(this@SpotService, p.x, p.y)
                     moving = false
                     performHapticFeedback(HapticFeedbackConstants.CONFIRM)
@@ -383,6 +391,16 @@ class SpotService : Service(), FlickView.Listener {
         private const val CHANNEL = "spot"
         const val ACTION_MOVE = "com.jono.flick.MOVE_SPOT"
         const val ACTION_OFF = "com.jono.flick.SPOT_OFF"
+
+        private var instance: SpotService? = null
+
+        /** Flick's own ring screen is showing (true) or gone (false): hide the spot meanwhile. */
+        fun cover(on: Boolean) {
+            instance?.let { s ->
+                s.covered = on
+                s.updateSpotVisibility()
+            }
+        }
 
         /** Starts (or refreshes) the spot if it's turned on and allowed. */
         fun sync(ctx: Context, action: String? = null) {

@@ -207,7 +207,10 @@ object WidgetRenderer {
                 rv.setImageViewResource(CELL_ICON[c], if (style == Store.DOT_GREY) R.drawable.empty_dot else R.drawable.empty_dot_white)
                 rv.setContentDescription(CELL[c], "Empty ${Slot.DIRECTIONS[i]}")
                 if (k.labels) rv.setTextViewText(CELL_TEXT[c], "")
-                rv.setOnClickPendingIntent(CELL[c], mutable(ctx, 500 + i, FlickActivity.emptyIntent(ctx, listOf(i))))
+                rv.setOnClickPendingIntent(
+                    CELL[c],
+                    mutable(ctx, 500 + i, FlickActivity.emptyIntent(ctx, listOf(i)).putExtra(WidgetSpot.EXTRA_CELL, i)),
+                )
                 continue
             }
             if (i == null || s == null) {
@@ -218,16 +221,14 @@ object WidgetRenderer {
             rv.setImageViewBitmap(CELL_ICON[c], bmp(s))
             rv.setContentDescription(CELL[c], s.label)
             if (k.labels) rv.setTextViewText(CELL_TEXT[c], s.label)
+            // Ring layouts tell the tap's target which compass cell it was, so the touch spot can
+            // find the widget's centre from it (separate request codes: the extras differ).
+            val off = if (k.ring) 1000 else 0
+            fun cell(i0: Intent) = if (k.ring) i0.putExtra(WidgetSpot.EXTRA_CELL, i) else i0
             val pi = when (s) {
-                is Slot.App -> PendingIntent.getActivity(
-                    ctx, 100 + i, LaunchActivity.intent(ctx, s.pkg, s.label, ""),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-                is Slot.Folder -> mutable(ctx, 200 + i, FlickActivity.intent(ctx, listOf(i)))
-                is Slot.Contact, is Slot.Link -> PendingIntent.getActivity(
-                    ctx, 700 + i, LaunchActivity.slotIntent(ctx, s),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
+                is Slot.App -> mutable(ctx, off + 100 + i, cell(LaunchActivity.intent(ctx, s.pkg, s.label, "")))
+                is Slot.Folder -> mutable(ctx, off + 200 + i, cell(FlickActivity.intent(ctx, listOf(i))))
+                is Slot.Contact, is Slot.Link -> mutable(ctx, off + 700 + i, cell(LaunchActivity.slotIntent(ctx, s)))
             }
             rv.setOnClickPendingIntent(CELL[c], pi)
         }

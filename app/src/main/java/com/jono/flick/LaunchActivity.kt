@@ -10,6 +10,7 @@ import android.widget.Toast
 class LaunchActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WidgetSpot.seenFrom(this, intent, plainHub = false)
         // A person (call / text) from the widget.
         intent.getStringExtra(EXTRA_SLOT)?.let { json ->
             Store.slotFromJson(json)?.let { if (Actions.run(this, it)) Store.addNode(this, it); WidgetRenderer.renderAll(this) }
