@@ -161,6 +161,12 @@ class MainActivity : Activity() {
             setPadding(0, dp(6), 0, dp(6))
         })
         col.addView(Switch(this).apply {
+            text = "Ask before calling someone (off: calls start right away)"
+            isChecked = Store.confirmCalls(this@MainActivity)
+            setOnCheckedChangeListener { _, on -> Store.setConfirmCalls(this@MainActivity, on) }
+            setPadding(0, dp(6), 0, dp(6))
+        })
+        col.addView(Switch(this).apply {
             text = "Vibrate on each direction and folder"
             isChecked = Store.haptics(this@MainActivity)
             setOnCheckedChangeListener { _, on -> Store.setHaptics(this@MainActivity, on) }

@@ -87,6 +87,14 @@
             </intent-filter>
         </activity>
 
+        <!-- "Call X?" before a direct call. -->
+        <activity
+            android:name=".ConfirmCallActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Overlay" />
+
         <!-- Adding a person: the system contact picker, then Call / Text / WhatsApp. -->
         <activity
             android:name=".PickContactActivity"

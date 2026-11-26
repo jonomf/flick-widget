@@ -141,6 +141,10 @@ object Store {
     fun dotStyle(ctx: Context): Int = prefs(ctx).getInt("dot_style", DOT_WHITE)
     fun setDotStyle(ctx: Context, v: Int) = prefs(ctx).edit().putInt("dot_style", v).apply()
 
+    /** Ask "Call X?" before a call starts (only matters when Flick may call directly). */
+    fun confirmCalls(ctx: Context): Boolean = prefs(ctx).getBoolean("confirm_calls", true)
+    fun setConfirmCalls(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("confirm_calls", v).apply()
+
     fun haptics(ctx: Context): Boolean = prefs(ctx).getBoolean("haptics", true)
     fun setHaptics(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("haptics", v).apply()
 

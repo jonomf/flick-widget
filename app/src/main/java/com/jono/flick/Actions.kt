@@ -18,7 +18,19 @@ object Actions {
     const val WHATSAPP_BUSINESS = "com.whatsapp.w4b"
 
     /** Returns false (and says why) when it couldn't be done. */
-    fun run(ctx: Context, item: Slot, opts: Bundle? = null): Boolean {
+    fun run(ctx: Context, item: Slot, opts: Bundle? = null, confirmed: Boolean = false): Boolean {
+        // A call that would start straight away: ask first, if that's the setting.
+        if (!confirmed && item is Slot.Contact && item.action == Slot.Contact.CALL &&
+            canCallDirectly(ctx) && Store.confirmCalls(ctx)
+        ) {
+            return runCatching {
+                ctx.startActivity(
+                    Intent(ctx, ConfirmCallActivity::class.java)
+                        .putExtra(ConfirmCallActivity.EXTRA_SLOT, Store.slotToJson(item))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }.isSuccess
+        }
         val intent = when (item) {
             is Slot.App -> ctx.packageManager.getLaunchIntentForPackage(item.pkg)
             is Slot.Contact -> contactIntent(ctx, item)
